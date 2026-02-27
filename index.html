@@ -1239,7 +1239,7 @@ class CanvasManager {
             img.sendToBack();
             this.onionSkin = img;
             this.canvas.requestRenderAll();
-        }, { crossOrigin: 'anonymous' });
+        }, { crossOrigin: 'anonymous' }); // crossOrigin prevents CORS-tainted canvas when loading external GitHub textures
     }
 
     clearOnionSkin() {
@@ -1881,6 +1881,7 @@ async function exportMcaddon() {
                 components['minecraft:repairable'] = {
                     repair_items: [{
                         items: [`minecraft:${REPAIR_MAP[w.repairMaterial]}`],
+                        // Molang: restores item's remaining durability + 5% of its max durability per repair item used
                         repair_amount: 'context.other->query.remaining_durability + 0.05 * context.other->query.max_durability'
                     }]
                 };
