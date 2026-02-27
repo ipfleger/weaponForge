@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Minecraft Weaponsmith</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@jaames/iro@5"></script>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
+    <style>
+        :root {
+            --bg: #121212; /* Clean solid background */
+            --surface: #2c2c2c;
+            --primary: #3b8526;
+            --text: #e5e5e5;
+            --grid-line: rgba(255, 255, 255, 0.08); /* Subtle grid */
+        }
+
+        body {
+            margin: 0; overflow: hidden;
+            background: var(--bg);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            display: flex; flex-direction: column; height: 100vh;
+            color: var(--text);
+            touch-action: none;
+            user-select: none;
+            transition: background 0.3s;
+        }
+
+        #canvas-wrapper {
+            flex: 1; position: relative;
+            background: transparent;
+            display: flex; align-items: center; justify-content: center;
+            overflow: hidden;
+        }
+
+        /* --- UI Elements --- */
+        .ui-btn, .close-btn { 
+            background: none; border: none; font-size: 20px; 
+            cursor: pointer; color: #aaa; padding: 5px; 
+            transition: color 0.2s;
+        }
+        .close-btn:hover { color: white; }
+
+        /* --- Custom Range Sliders --- */
+        input[type=range] {
+            -webkit-appearance: none; width: 100%;
+            background: transparent; margin-top: 8px;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none; height: 16px; width: 16px;
+            border-radius: 50%; background: var(--text);
+            cursor: pointer; margin-top: -6px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 4px; cursor: pointer;
+            background: #555; border-radius: 2px;
+        }
+
+        /* --- Top Left: Color Palette --- */
+        .pinned-container { position: fixed; top: 20px; left: 20px; display: flex; align-items: center; gap: 12px; z-index: 100; }
+
+        .palette-fab {
+            width: 56px; height: 56px; border-radius: 50%;
+            background: #ccc; border: 3px solid #333;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; position: relative; overflow: hidden;
+        }
+        .palette-fab i { color: white; font-size: 28px; z-index: 2; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5)); }
+
+        .pinned-strip {
+            display: flex; gap: 10px; padding: 8px;
+            background: rgba(30, 30, 30, 0.85); backdrop-filter: blur(12px);
+            border-radius: 30px; border: 1px solid rgba(255,255,255,0.05);
+            max-width: 0; opacity: 0; overflow: hidden; pointer-events: none;
+            transition: all 0.3s ease;
+        }
+        .pinned-strip.visible { max-width: 100vw; opacity: 1; padding-right: 12px; pointer-events: auto; }
+
+        .pin-swatch {
+            width: 36px; height: 36px; border-radius: 50%; border: 2px solid #555;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2); flex-shrink: 0; cursor: pointer; position: relative;
+        }
+        .pin-swatch.active-swatch { border-color: white; transform: scale(1.1); }
+        
+        .add-pin-btn {
+            width: 36px; height: 36px; border-radius: 50%;
+            background: #333; border: 1px dashed #666;
+            display: flex; align-items: center; justify-content: center; color: #aaa; cursor: pointer;
+        }
+
+        /* --- Top Right: Undo/Redo --- */
+        .top-right-controls {
+            position: fixed; top: 20px; right: 20px; display: flex; gap: 10px; z-index: 100;
+        }
+        .icon-btn {
+            width: 44px; height: 44px; border-radius: 50%;
+            background: #2a2a2a; border: 1px solid rgba(255,255,255,0.1); color: var(--text);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 20px; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            transition: background 0.2s, opacity 0.2s;
+        }
+        .icon-btn:active { background: #444; }
+        .icon-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+        /* --- Bottom Left: Radial Menu --- */
+        .bottom-left-menu {
+            position: fixed; bottom: 30px; left: 20px;
+            z-index: 100; width: 60px; height: 60px;
+        }
+
+        .main-fab-btn {
+            width: 56px; height: 56px;
+            background: var(--text); color: #1a1a1a;
+            border-radius: 50%; border: none;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+            font-size: 28px;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; position: relative; z-index: 102;
+            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .main-fab-btn.open { transform: rotate(45deg); background: #ff5555; color: white; }
+
+        .radial-wheel-wrapper {
+            position: absolute; bottom: 28px; left: 28px;
+            width: 0; height: 0; pointer-events: none;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 101; opacity: 0;
+        }
+        .menu-open .radial-wheel-wrapper { opacity: 1; pointer-events: auto; }
+
+        .radial-wheel {
+            position: absolute; top: 0; left: 0;
+            width: 240px; height: 240px;
+            transform: translate(-50%, -50%) scale(0.5);
+            border-radius: 50%;
+            transition: transform 0.3s ease;
+            touch-action: none;
+        }
+        .menu-open .radial-wheel { transform: translate(-50%, -50%) scale(1); }
+
+        .radial-item {
+            position: absolute; width: 44px; height: 44px;
+            background: #333; color: var(--text);
+            border-radius: 50%; border: 1px solid rgba(255,255,255,0.1);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 20px; cursor: pointer;
+            top: 50%; left: 50%; margin-top: -22px; margin-left: -22px;
+        }
+        .radial-item.active { background: var(--primary); border-color: #4caf50; color: white; }
+
+        /* --- Drawers --- */
+        .bottom-drawer {
+            position: fixed; bottom: 0; left: 0; width: 100%;
+            background: #242424; border-top-left-radius: 20px; border-top-right-radius: 20px;
+            box-shadow: 0 -4px 24px rgba(0,0,0,0.6);
+            padding: 24px; box-sizing: border-box; z-index: 200;
+            transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+            display: flex; flex-direction: column; gap: 16px;
+            border-top: 1px solid rgba(255,255,255,0.05);
+        }
+        .bottom-drawer.visible { transform: translateY(0); }
+
+        .drawer-header { display: flex; justify-content: space-between; align-items: center; font-weight: 600; font-size: 16px; }
+        .drawer-input {
+            width: 100%; border: 1px solid #444; border-radius: 10px;
+            padding: 12px; background: #1a1a1a; color: white;
+            font-family: monospace; font-size: 14px; box-sizing: border-box;
+        }
+        .btn-primary {
+            background: var(--surface); color: white; border: 1px solid rgba(255,255,255,0.1);
+            padding: 12px 18px; border-radius: 10px; font-weight: 500;
+            width: 100%; cursor: pointer; font-size: 15px; transition: background 0.2s;
+        }
+        .btn-primary.accent { background: var(--primary); border: none; }
+        .btn-primary:active { filter: brightness(0.9); }
+
+        /* --- Color Picker --- */
+        .picker-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0, 0.7); backdrop-filter: blur(5px);
+            z-index: 200; display: flex; align-items: center; justify-content: center;
+            opacity: 0; pointer-events: none; transition: opacity 0.2s;
+        }
+        .picker-overlay.active { opacity: 1; pointer-events: auto; }
+        .picker-card {
+            background: #242424; padding: 24px; border-radius: 20px;
+            box-shadow: 0 20px 30px rgba(0, 0, 0, 0.6);
+            display: flex; flex-direction: column; align-items: center; gap: 20px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        
+        .slider-label { font-size: 12px; color: #888; margin-bottom: 4px; display: block; }
+
+        .bg-swatch-container {
+            display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+        }
+        .bg-swatch {
+            height: 40px; border-radius: 8px; border: 2px solid rgba(255,255,255,0.1);
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="canvas-wrapper">
+        <canvas id="c"></canvas>
+    </div>
+
+    <div id="ui-layer"></div>
+
+    <script>
+    // --- STATE MANAGEMENT ---
+    window.State = {
+        activeColor: localStorage.getItem('mcActiveColor') || "rgba(57, 181, 230, 1)", 
+        pinnedColors: JSON.parse(localStorage.getItem('mcPinnedColors')) || ['rgba(57, 181, 230, 1)', 'rgba(46, 179, 168, 1)', 'rgba(92, 92, 92, 1)', 'rgba(97, 63, 35, 1)', 'rgba(255, 255, 255, 1)', 'rgba(0, 0, 0, 1)'],
+        currentTool: 'pencil', 
+
+        save() {
+            localStorage.setItem('mcActiveColor', this.activeColor);
+            localStorage.setItem('mcPinnedColors', JSON.stringify(this.pinnedColors));
+        }
+    };
+
+    // --- CANVAS MANAGER ---
+    class CanvasManager {
+        constructor() {
+            this.canvas = new fabric.Canvas('c', { 
+                selection: false, 
+                defaultCursor: 'crosshair',
+                preserveObjectStacking: true,
+                fireRightClick: true,
+                stopContextMenu: true
+            });
+            
+            this.gridSize = 16;
+            this.pixels = []; 
+            this.isPainting = false;
+            this.stateChangedThisStroke = false;
+            this.onionSkin = null; 
+
+            // History state for Undo/Redo
+            this.undoStack = [];
+            this.redoStack = [];
+
+            this.resize();
+            this.initGrid();
+            this.setupEvents();
+            
+            // Push initial blank state
+            this.saveHistoryState();
+
+            window.addEventListener('resize', () => this.resize());
+        }
+
+        resize() {
+            const wrapper = document.getElementById('canvas-wrapper');
+            if (wrapper) {
+                this.canvas.setWidth(wrapper.clientWidth);
+                this.canvas.setHeight(wrapper.clientHeight);
+                this.centerGrid();
+            }
+        }
+
+        initGrid() {
+            const pixelSize = 20; 
+            for (let y = 0; y < this.gridSize; y++) {
+                this.pixels[y] = [];
+                for (let x = 0; x < this.gridSize; x++) {
+                    const rect = new fabric.Rect({
+                        left: x * pixelSize,
+                        top: y * pixelSize,
+                        width: pixelSize,
+                        height: pixelSize,
+                        fill: 'transparent',
+                        stroke: 'var(--grid-line)', 
+                        strokeWidth: 1,
+                        selectable: false, 
+                        hoverCursor: 'crosshair',
+                        data: { x, y } 
+                    });
+                    this.pixels[y][x] = rect;
+                    this.canvas.add(rect);
+                }
+            }
+            this.centerGrid();
+        }
+
+        centerGrid() {
+            const gridW = this.gridSize * 20;
+            const scale = Math.min(this.canvas.width, this.canvas.height) / (gridW * 1.4);
+            
+            this.canvas.setViewportTransform([scale, 0, 0, scale, 
+                (this.canvas.width - gridW * scale) / 2, 
+                (this.canvas.height - gridW * scale) / 2
+            ]);
+        }
+
+        setupEvents() {
+            this.canvas.on('mouse:down', (o) => {
+                if (!o.target) return;
+                this.isPainting = true;
+                this.stateChangedThisStroke = false;
+                this.paintPixel(o.target);
+            });
+            
+            this.canvas.on('mouse:over', (o) => {
+                if (this.isPainting && o.target) this.paintPixel(o.target);
+            });
+
+            this.canvas.on('mouse:up', () => {
+                this.isPainting = false;
+                if (this.stateChangedThisStroke) {
+                    this.saveHistoryState();
+                }
+            });
+        }
+
+        // --- HISTORY LOGIC (UNDO/REDO) ---
+        getGridState() {
+            return this.pixels.map(row => row.map(rect => rect.fill));
+        }
+
+        applyGridState(state) {
+            for(let y=0; y<16; y++) {
+                for(let x=0; x<16; x++) {
+                    const color = state[y][x];
+                    this.pixels[y][x].set('fill', color);
+                    this.pixels[y][x].set('stroke', color === 'transparent' ? 'var(--grid-line)' : 'transparent');
+                }
+            }
+            this.canvas.requestRenderAll();
+        }
+
+        saveHistoryState() {
+            this.undoStack.push(this.getGridState());
+            this.redoStack = []; 
+            if (this.undoStack.length > 30) this.undoStack.shift(); 
+            document.dispatchEvent(new CustomEvent('history-changed'));
+        }
+
+        undo() {
+            if (this.undoStack.length > 1) {
+                this.redoStack.push(this.undoStack.pop());
+                this.applyGridState(this.undoStack[this.undoStack.length - 1]);
+                document.dispatchEvent(new CustomEvent('history-changed'));
+            }
+        }
+
+        redo() {
+            if (this.redoStack.length > 0) {
+                const state = this.redoStack.pop();
+                this.undoStack.push(state);
+                this.applyGridState(state);
+                document.dispatchEvent(new CustomEvent('history-changed'));
+            }
+        }
+
+        // Helper to lighten/darken existing pixel
+        tintColor(colorStr, amount) {
+            if (!colorStr || colorStr === 'transparent') return 'transparent';
+            const c = new fabric.Color(colorStr).getSource();
+            return `rgba(${Math.max(0, Math.min(255, c[0] + amount))}, ${Math.max(0, Math.min(255, c[1] + amount))}, ${Math.max(0, Math.min(255, c[2] + amount))}, ${c[3]})`;
+        }
+
+        paintPixel(rect) {
+            if (!rect || !rect.data) return;
+
+            const oldFill = rect.fill;
+            let newFill = oldFill;
+
+            if (window.State.currentTool === 'pencil') {
+                newFill = window.State.activeColor;
+            } 
+            else if (window.State.currentTool === 'eraser') {
+                newFill = 'transparent';
+            }
+            else if (window.State.currentTool === 'lighten') {
+                newFill = this.tintColor(oldFill, 25);
+            }
+            else if (window.State.currentTool === 'darken') {
+                newFill = this.tintColor(oldFill, -25);
+            }
+            else if (window.State.currentTool === 'picker') {
+                if(oldFill !== 'transparent') {
+                    window.State.activeColor = oldFill;
+                    window.State.save();
+                    document.dispatchEvent(new CustomEvent('color-picked'));
+                }
+                return;
+            }
+            else if (window.State.currentTool === 'fill') {
+                this.fillGrid();
+                return;
+            }
+
+            if (oldFill !== newFill) {
+                rect.set('fill', newFill);
+                rect.set('stroke', newFill === 'transparent' ? 'var(--grid-line)' : 'transparent');
+                this.stateChangedThisStroke = true;
+                this.canvas.requestRenderAll();
+            }
+        }
+
+        fillGrid() {
+            let changed = false;
+            for(let y=0; y<16; y++) {
+                for(let x=0; x<16; x++) {
+                    if (this.pixels[y][x].fill !== window.State.activeColor) {
+                        this.pixels[y][x].set('fill', window.State.activeColor);
+                        this.pixels[y][x].set('stroke', 'transparent');
+                        changed = true;
+                    }
+                }
+            }
+            if(changed) {
+                this.canvas.requestRenderAll();
+                this.saveHistoryState();
+            }
+        }
+        
+        clearGrid() {
+            let changed = false;
+            for(let y=0; y<16; y++) {
+                for(let x=0; x<16; x++) {
+                    if (this.pixels[y][x].fill !== 'transparent') {
+                        this.pixels[y][x].set('fill', 'transparent');
+                        this.pixels[y][x].set('stroke', 'var(--grid-line)');
+                        changed = true;
+                    }
+                }
+            }
+            if(changed) {
+                this.canvas.requestRenderAll();
+                this.saveHistoryState();
+            }
+        }
+
+        // --- ONION SKIN LOGIC ---
+        setOnionSkin(url) {
+            this.clearOnionSkin();
+            if (!url) return;
+
+            fabric.Image.fromURL(url, (img) => {
+                const gridTotalSize = 16 * 20;
+                img.scaleToWidth(gridTotalSize); 
+                
+                const opacityVal = parseFloat(document.getElementById('onion-opacity').value) || 0.5;
+
+                img.set({
+                    left: 0, top: 0,
+                    opacity: opacityVal,
+                    selectable: false, evented: false, excludeFromExport: true,
+                    imageSmoothing: false 
+                });
+                
+                this.canvas.add(img);
+                img.sendToBack(); 
+                this.onionSkin = img;
+                this.canvas.requestRenderAll();
+            });
+        }
+
+        clearOnionSkin() {
+            if (this.onionSkin) {
+                this.canvas.remove(this.onionSkin);
+                this.onionSkin = null;
+                this.canvas.requestRenderAll();
+            }
+        }
+
+        async downloadAssets(filename) {
+            const zip = new JSZip();
+            const tempC = document.createElement('canvas');
+            tempC.width = 16; tempC.height = 16;
+            const ctx = tempC.getContext('2d');
+            
+            for(let y=0; y<16; y++) {
+                for(let x=0; x<16; x++) {
+                    const rect = this.pixels[y][x];
+                    if (rect.fill !== 'transparent') {
+                        ctx.fillStyle = rect.fill;
+                        ctx.fillRect(x, y, 1, 1);
+                    }
+                }
+            }
+            
+            const imgData = tempC.toDataURL().split(',')[1];
+            zip.file(`${filename}.png`, imgData, {base64: true});
+
+            const modelJson = {
+                "parent": "item/generated",
+                "textures": { "layer0": `item/${filename}` }
+            };
+            zip.file(`${filename}.json`, JSON.stringify(modelJson, null, 4));
+
+            zip.generateAsync({type:"blob"}).then(function(content) {
+                const file = new File([content], `${filename}_assets.zip`, { type: 'application/zip' });
+                if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                    navigator.share({
+                        files: [file],
+                        title: `${filename} Texture`,
+                        text: 'My custom Minecraft weapon!'
+                    }).catch(err => {
+                        console.log('Share canceled or failed, falling back to download', err);
+                        saveAs(content, `${filename}_assets.zip`);
+                    });
+                } else {
+                    saveAs(content, `${filename}_assets.zip`);
+                }
+            });
+        }
+    }
+
+
+    // --- UI MANAGER ---
+    class UI {
+        constructor(canvasManager) {
+            this.cm = canvasManager;
+            this.container = document.getElementById('ui-layer');
+            this.rotationState = { current: 0, target: 0, isDragging: false, rafId: null };
+
+            this.render();
+            this.setupRadialWheel();
+            this.bindEvents();
+            
+            document.addEventListener('color-picked', () => this.updateFabUI());
+            document.addEventListener('history-changed', () => this.updateUndoRedoUI());
+        }
+
+        render() {
+            this.container.innerHTML = `
+                <div class="pinned-container">
+                    <div class="palette-fab" id="main-fab"><i class="ph-fill ph-paint-brush-broad"></i></div>
+                    <div class="pinned-strip" id="pinned-strip">
+                        <div class="add-pin-btn" id="add-pin-trigger"><i class="ph ph-plus"></i></div>
+                    </div>
+                </div>
+
+                <div class="top-right-controls">
+                    <button class="icon-btn" id="undo-btn" disabled><i class="ph ph-arrow-u-up-left"></i></button>
+                    <button class="icon-btn" id="redo-btn" disabled><i class="ph ph-arrow-u-up-right"></i></button>
+                </div>
+
+                <div class="bottom-left-menu" id="menu-container">
+                    <div class="radial-wheel-wrapper">
+                        <div class="radial-wheel" id="radial-wheel">
+                            ${this.getRadialItems()}
+                        </div>
+                    </div>
+                    <button class="main-fab-btn" id="main-add-btn"><i class="ph ph-plus"></i></button>
+                </div>
+                
+                <div class="bottom-drawer" id="export-drawer">
+                     <div class="drawer-header"><span>Export to Minecraft</span><button class="close-btn" id="close-exp"><i class="ph ph-x"></i></button></div>
+                     <div>
+                        <span class="slider-label">Item Name (e.g. diamond_sword)</span>
+                        <input type="text" class="drawer-input" id="item-name" value="my_weapon">
+                     </div>
+                     <button class="btn-primary accent" id="do-export">Export .ZIP</button>
+                </div>
+                
+                <div class="bottom-drawer" id="onion-drawer">
+                    <div class="drawer-header"><span>Trace Vanilla Item</span><button class="close-btn" id="close-onion"><i class="ph ph-x"></i></button></div>
+                    
+                    <div>
+                        <span class="slider-label">Onion Skin Opacity</span>
+                        <input type="range" id="onion-opacity" min="0.1" max="1" step="0.1" value="0.5">
+                    </div>
+
+                    <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:10px; margin-top:8px;">
+                        <button class="btn-primary" data-onion="sword">Sword</button>
+                        <button class="btn-primary" data-onion="pickaxe">Pickaxe</button>
+                        <button class="btn-primary" data-onion="axe">Axe</button>
+                        <button class="btn-primary" data-onion="shovel">Shovel</button>
+                        <button class="btn-primary" data-onion="hoe">Hoe</button>
+                        <button class="btn-primary" style="background:#555" data-onion="clear">Clear</button>
+                    </div>
+                </div>
+
+                <div class="bottom-drawer" id="bg-drawer">
+                    <div class="drawer-header"><span>Visibility Background</span><button class="close-btn" id="close-bg"><i class="ph ph-x"></i></button></div>
+                    <span class="slider-label">Does not affect exported texture.</span>
+                    <div class="bg-swatch-container">
+                        <div class="bg-swatch" style="background: #121212;" data-bg="#121212"></div>
+                        <div class="bg-swatch" style="background: #555555;" data-bg="#555555"></div>
+                        <div class="bg-swatch" style="background: #e0e0e0;" data-bg="#e0e0e0"></div>
+                        <div class="bg-swatch" style="background: #00ff00;" data-bg="#00ff00"></div>
+                    </div>
+                </div>
+
+                <div class="picker-overlay" id="picker-overlay">
+                    <div class="picker-card" id="picker-card">
+                        <div id="iro-container"></div>
+                        <button class="btn-primary accent" id="confirm-pin-btn" style="width: 100%;">Select Color</button>
+                    </div>
+                </div>
+            `;
+            this.updateFabUI();
+            this.renderStrip();
+        }
+
+        getRadialItems() {
+            const tools = [
+                { id: 'pencil', icon: 'ph-pencil-simple' },
+                { id: 'eraser', icon: 'ph-eraser' },
+                { id: 'fill', icon: 'ph-paint-bucket' },
+                { id: 'picker', icon: 'ph-eyedropper' },
+                { id: 'lighten', icon: 'ph-sun' },
+                { id: 'darken', icon: 'ph-moon' },
+                { id: 'ghost', icon: 'ph-ghost' },
+                { id: 'background', icon: 'ph-monitor' },
+                { id: 'download', icon: 'ph-download-simple' },
+            ];
+            return tools.map(t => `<div class="radial-item" data-action="${t.id}"><i class="ph ${t.icon}"></i></div>`).join('');
+        }
+
+        setupRadialWheel() {
+            const wheel = document.getElementById('radial-wheel');
+            const items = document.querySelectorAll('.radial-item');
+            const radius = 95;
+            const step = (2 * Math.PI) / items.length;
+
+            items.forEach((item, index) => {
+                const angle = (index * step) - (Math.PI / 2);
+                item.dataset.baseAngle = angle; 
+                const x = radius * Math.cos(angle);
+                const y = radius * Math.sin(angle);
+                item.style.transform = `translate(${x}px, ${y}px)`;
+                item.onclick = (e) => { 
+                    e.stopPropagation(); 
+                    if(!this.rotationState.isDragging) this.handleAction(item.dataset.action); 
+                };
+            });
+
+            // Touch Rotation Logic
+            let startAngle = 0;
+            let lastTarget = 0;
+            const getAngle = (x, y) => {
+                const rect = wheel.getBoundingClientRect();
+                const cx = rect.left + rect.width / 2;
+                const cy = rect.top + rect.height / 2;
+                return Math.atan2(y - cy, x - cx) * (180 / Math.PI);
+            };
+
+            wheel.addEventListener('touchstart', (e) => {
+                this.rotationState.isDragging = false;
+                startAngle = getAngle(e.touches[0].clientX, e.touches[0].clientY);
+                lastTarget = this.rotationState.target;
+                if (!this.rotationState.rafId) this.animate();
+            }, {passive: true});
+
+            wheel.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                this.rotationState.isDragging = true;
+                const newAngle = getAngle(e.touches[0].clientX, e.touches[0].clientY);
+                const delta = newAngle - startAngle;
+                this.rotationState.target = lastTarget + delta;
+            }, {passive: false});
+
+            wheel.addEventListener('touchend', () => {
+                setTimeout(() => { this.rotationState.isDragging = false; }, 50);
+            });
+        }
+        
+        animate() {
+             const state = this.rotationState;
+             state.current += (state.target - state.current) * 0.15;
+             const offsetRad = state.current * (Math.PI / 180);
+             const radius = 95;
+             const items = document.querySelectorAll('.radial-item');
+             
+             items.forEach(item => {
+                const baseAngle = parseFloat(item.dataset.baseAngle);
+                const finalAngle = baseAngle + offsetRad;
+                const x = radius * Math.cos(finalAngle);
+                const y = radius * Math.sin(finalAngle);
+                item.style.transform = `translate(${x}px, ${y}px)`;
+             });
+
+             const diff = Math.abs(state.target - state.current);
+             if (diff > 0.05 || state.isDragging || document.getElementById('menu-container').classList.contains('menu-open')) {
+                state.rafId = requestAnimationFrame(() => this.animate());
+             } else {
+                state.rafId = null;
+             }
+        }
+
+        handleAction(action) {
+            this.toggleRadial(); 
+            
+            if (action === 'download') {
+                document.getElementById('export-drawer').classList.add('visible');
+            } else if (action === 'ghost') {
+                document.getElementById('onion-drawer').classList.add('visible');
+            } else if (action === 'background') {
+                document.getElementById('bg-drawer').classList.add('visible');
+            } else if (action === 'clear') {
+                if(confirm('Clear entire grid?')) this.cm.clearGrid();
+            } else {
+                window.State.currentTool = action;
+                this.showToast(`${action.charAt(0).toUpperCase() + action.slice(1)} Tool Selected`);
+            }
+        }
+        
+        showToast(msg) {
+            const toast = document.createElement('div');
+            toast.innerText = msg;
+            toast.style.cssText = 'position:fixed; bottom:120px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.8); backdrop-filter: blur(4px); color:white; padding:10px 20px; border-radius:20px; font-size:14px; pointer-events:none; z-index:500; animation: fadeOut 2s forwards;';
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 2000);
+            
+            if(!document.getElementById('toast-style')) {
+                const s = document.createElement('style');
+                s.id = 'toast-style';
+                s.innerHTML = '@keyframes fadeOut { 0% {opacity:1} 80% {opacity:1} 100% {opacity:0} }';
+                document.head.appendChild(s);
+            }
+        }
+
+        toggleRadial() {
+            const container = document.getElementById('menu-container');
+            const isOpen = container.classList.toggle('menu-open');
+            document.getElementById('main-add-btn').classList.toggle('open');
+            if (isOpen && !this.rotationState.rafId) this.animate();
+        }
+
+        updateUndoRedoUI() {
+            document.getElementById('undo-btn').disabled = this.cm.undoStack.length <= 1;
+            document.getElementById('redo-btn').disabled = this.cm.redoStack.length === 0;
+        }
+
+        bindEvents() {
+            document.getElementById('main-add-btn').onclick = () => this.toggleRadial();
+            
+            // Undo/Redo
+            document.getElementById('undo-btn').onclick = () => this.cm.undo();
+            document.getElementById('redo-btn').onclick = () => this.cm.redo();
+
+            // Drawer Close Buttons
+            document.getElementById('close-exp').onclick = () => document.getElementById('export-drawer').classList.remove('visible');
+            document.getElementById('close-onion').onclick = () => document.getElementById('onion-drawer').classList.remove('visible');
+            document.getElementById('close-bg').onclick = () => document.getElementById('bg-drawer').classList.remove('visible');
+            
+            // Background Options
+            document.querySelectorAll('[data-bg]').forEach(btn => {
+                btn.onclick = (e) => {
+                    document.documentElement.style.setProperty('--bg', e.target.dataset.bg);
+                    document.getElementById('bg-drawer').classList.remove('visible');
+                }
+            });
+
+            // Export Action
+            document.getElementById('do-export').onclick = () => {
+                const name = document.getElementById('item-name').value;
+                this.cm.downloadAssets(name || 'item');
+                document.getElementById('export-drawer').classList.remove('visible');
+            };
+
+            // Onion Skin Opacity Slider
+            document.getElementById('onion-opacity').addEventListener('input', (e) => {
+                if (this.cm.onionSkin) {
+                    this.cm.onionSkin.set('opacity', parseFloat(e.target.value));
+                    this.cm.canvas.requestRenderAll();
+                }
+            });
+
+            // Onion Skin Buttons
+            document.querySelectorAll('[data-onion]').forEach(btn => {
+                btn.onclick = (e) => {
+                    const type = e.target.dataset.onion;
+                    if (type === 'clear') {
+                        this.cm.clearOnionSkin();
+                    } else {
+                        const url = `https://raw.githubusercontent.com/InventivetalentDev/minecraft-assets/1.20.1/assets/minecraft/textures/item/stone_${type}.png`;
+                        this.cm.setOnionSkin(url);
+                    }
+                    document.getElementById('onion-drawer').classList.remove('visible');
+                }
+            });
+            
+            // Global Click
+            document.getElementById('canvas-wrapper').addEventListener('mousedown', () => this.handleGlobalClick());
+            document.getElementById('canvas-wrapper').addEventListener('touchstart', () => this.handleGlobalClick(), {passive:true});
+            
+            // Color Palette
+            document.getElementById('main-fab').onclick = () => {
+                 document.getElementById('pinned-strip').classList.toggle('visible');
+            };
+            
+            document.getElementById('add-pin-trigger').onclick = (e) => {
+                 e.stopPropagation();
+                 this.openPicker();
+            };
+        }
+
+        handleGlobalClick() {
+            if(document.getElementById('menu-container').classList.contains('menu-open')) this.toggleRadial();
+            document.getElementById('pinned-strip').classList.remove('visible');
+            document.getElementById('export-drawer').classList.remove('visible');
+            document.getElementById('onion-drawer').classList.remove('visible');
+            document.getElementById('bg-drawer').classList.remove('visible');
+        }
+
+        // --- COLOR LOGIC ---
+        renderStrip() {
+            const strip = document.getElementById('pinned-strip');
+            const addBtn = document.getElementById('add-pin-trigger');
+            
+            Array.from(strip.children).forEach(child => { if(!child.id) child.remove(); });
+
+            window.State.pinnedColors.forEach(c => {
+                const div = document.createElement('div');
+                div.className = `pin-swatch ${c===window.State.activeColor ? 'active-swatch':''}`;
+                div.style.backgroundImage = 'conic-gradient(#ccc 25%, #fff 25% 50%, #ccc 50% 75%, #fff 75%)';
+                div.style.backgroundSize = '8px 8px';
+                
+                const inner = document.createElement('div');
+                inner.style.width = '100%'; inner.style.height = '100%'; inner.style.borderRadius = '50%';
+                inner.style.backgroundColor = c;
+                div.appendChild(inner);
+
+                div.onclick = () => {
+                    window.State.activeColor = c;
+                    window.State.save();
+                    this.updateFabUI();
+                    this.renderStrip();
+                    window.State.currentTool = 'pencil';
+                };
+                
+                let t;
+                div.addEventListener('touchstart', () => t = setTimeout(() => {
+                    if(confirm('Delete color?')) {
+                        window.State.pinnedColors = window.State.pinnedColors.filter(x => x!==c);
+                        window.State.save();
+                        this.renderStrip();
+                    }
+                }, 600));
+                div.addEventListener('touchend', () => clearTimeout(t));
+                
+                strip.insertBefore(div, addBtn);
+            });
+        }
+
+        updateFabUI() {
+            document.getElementById('main-fab').style.background = window.State.activeColor;
+        }
+
+        openPicker() {
+            if(!this.iroPicker) {
+                // FIXED: Added transparency: true to allow the alpha slider to render
+                this.iroPicker = new iro.ColorPicker("#iro-container", { 
+                    width: 240, 
+                    color: window.State.activeColor,
+                    transparency: true, 
+                    layout: [
+                        {component: iro.ui.Wheel}, 
+                        {component: iro.ui.Slider, options: {sliderType: 'value'}},
+                        {component: iro.ui.Slider, options: {sliderType: 'alpha'}}
+                    ] 
+                });
+                
+                document.getElementById('confirm-pin-btn').onclick = () => {
+                    const c = this.iroPicker.color.rgbaString;
+                    window.State.pinnedColors.push(c);
+                    window.State.activeColor = c;
+                    window.State.save();
+                    this.renderStrip();
+                    this.updateFabUI();
+                    document.getElementById('picker-overlay').classList.remove('active');
+                    window.State.currentTool = 'pencil';
+                };
+                
+                document.getElementById('picker-overlay').onclick = (e) => {
+                    if(e.target.id === 'picker-overlay') document.getElementById('picker-overlay').classList.remove('active');
+                };
+            }
+            this.iroPicker.color.set(window.State.activeColor);
+            document.getElementById('picker-overlay').classList.add('active');
+        }
+    }
+
+    // --- INITIALIZATION ---
+    document.addEventListener('DOMContentLoaded', () => {
+        const canvasMgr = new CanvasManager();
+        const ui = new UI(canvasMgr);
+
+        document.addEventListener('contextmenu', event => event.preventDefault());
+
+        document.body.addEventListener('touchmove', function(e) {
+            if (e.target.closest('.bottom-drawer') || e.target.closest('#picker-card')) {
+                return;
+            }
+            if (e.target.tagName === 'CANVAS') {
+                 e.preventDefault();
+            }
+        }, { passive: false });
+    });
+    </script>
+</body>
+</html>
