@@ -1,0 +1,2034 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#121212">
+    <title>WeaponForge</title>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@jaames/iro@5"></script>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
+    <style>
+        /* ======================================================
+           RESET & VARIABLES
+        ====================================================== */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg: #121212;
+            --surface: #2c2c2c;
+            --surface2: #242424;
+            --primary: #3b8526;
+            --primary-light: #4caf50;
+            --text: #e5e5e5;
+            --text-muted: #888;
+            --grid-line: rgba(255, 255, 255, 0.08);
+            --border: rgba(255,255,255,0.08);
+            --danger: #e53935;
+        }
+
+        html, body {
+            height: 100%; overflow: hidden;
+            background: var(--bg); color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            user-select: none; -webkit-user-select: none;
+            touch-action: none;
+        }
+
+        /* ======================================================
+           SCREENS
+        ====================================================== */
+        .screen {
+            position: fixed; top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: var(--bg);
+            display: flex; flex-direction: column;
+            transform: translateX(100%);
+            transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+            will-change: transform; overflow: hidden;
+        }
+        .screen.screen-active { transform: translateX(0); }
+
+        /* ======================================================
+           SCREEN 1: HOME
+        ====================================================== */
+        .home-header {
+            flex-shrink: 0;
+            padding: 16px 16px 12px;
+            display: flex; align-items: center; gap: 10px;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface2);
+        }
+        .home-title { font-size: 22px; font-weight: 700; white-space: nowrap; }
+
+        .project-name-input {
+            flex: 1; min-width: 0;
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 10px; padding: 9px 12px;
+            color: var(--text); font-size: 15px; outline: none;
+            touch-action: auto;
+        }
+        .project-name-input:focus { border-color: var(--primary); }
+
+        .weapon-grid {
+            flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
+            padding: 14px;
+            display: grid; grid-template-columns: repeat(2, 1fr);
+            gap: 12px; align-content: start;
+            touch-action: pan-y;
+        }
+
+        .weapon-card {
+            background: var(--surface); border-radius: 14px;
+            border: 2px solid var(--border);
+            padding: 12px; display: flex; flex-direction: column;
+            align-items: center; gap: 8px; cursor: pointer;
+            transition: border-color 0.2s, transform 0.1s;
+            position: relative; min-height: 148px;
+        }
+        .weapon-card:active { transform: scale(0.97); border-color: var(--primary); }
+
+        .weapon-preview-canvas {
+            image-rendering: pixelated;
+            image-rendering: -moz-crisp-edges;
+            border-radius: 6px;
+            background: repeating-conic-gradient(#333 0% 25%, #222 0% 50%) 0 0 / 8px 8px;
+            width: 64px; height: 64px; flex-shrink: 0;
+        }
+
+        .weapon-card-name {
+            font-weight: 600; font-size: 13px;
+            text-align: center; word-break: break-word;
+            line-height: 1.3; width: 100%;
+        }
+        .weapon-card-meta {
+            display: flex; align-items: center; gap: 6px;
+            font-size: 12px; color: var(--text-muted);
+        }
+        .damage-badge {
+            background: rgba(229,57,53,0.2); color: #ff8080;
+            padding: 2px 7px; border-radius: 10px;
+            font-size: 11px; font-weight: 600;
+        }
+
+        .add-weapon-card {
+            border-style: dashed; border-color: #444;
+            justify-content: center; min-height: 148px;
+        }
+        .add-weapon-card:active { border-color: var(--primary); }
+        .add-icon { font-size: 38px; color: #555; line-height: 1; }
+        .add-weapon-card .weapon-card-name { color: var(--text-muted); font-weight: 400; }
+
+        .home-actions {
+            flex-shrink: 0;
+            display: flex; gap: 8px; overflow-x: auto;
+            padding: 10px 14px;
+            padding-bottom: max(10px, env(safe-area-inset-bottom));
+            border-top: 1px solid var(--border); background: var(--surface2);
+            touch-action: pan-x;
+        }
+        .home-actions::-webkit-scrollbar { display: none; }
+
+        .action-btn {
+            flex-shrink: 0;
+            background: var(--surface); border: 1px solid var(--border);
+            color: var(--text); padding: 10px 14px; border-radius: 10px;
+            font-size: 13px; font-weight: 500; cursor: pointer;
+            white-space: nowrap; min-height: 44px;
+            transition: background 0.15s;
+        }
+        .action-btn:active { background: #3a3a3a; }
+        .action-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+        .action-btn.primary { background: var(--primary); border-color: var(--primary); }
+
+        /* ======================================================
+           SCREEN 2: EDITOR
+        ====================================================== */
+        .editor-topbar {
+            flex-shrink: 0;
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 12px; height: 56px;
+            border-bottom: 1px solid var(--border); background: var(--surface2);
+        }
+        .editor-topbar-title {
+            font-size: 14px; font-weight: 600; color: var(--text-muted);
+            max-width: 140px; overflow: hidden;
+            text-overflow: ellipsis; white-space: nowrap;
+        }
+        .topbar-btn {
+            background: none; border: 1px solid var(--border); color: var(--text);
+            padding: 8px 14px; border-radius: 8px;
+            font-size: 14px; cursor: pointer; min-height: 36px; white-space: nowrap;
+        }
+        .topbar-btn.primary { background: var(--primary); border-color: var(--primary); }
+        .topbar-btn:active { opacity: 0.7; }
+
+        #canvas-area {
+            flex-shrink: 0; position: relative;
+            overflow: hidden; height: 45vh;
+            background: var(--bg);
+        }
+
+        #canvas-wrapper {
+            width: 100%; height: 100%;
+            display: flex; align-items: center; justify-content: center;
+            overflow: hidden;
+        }
+
+        .editor-divider {
+            flex-shrink: 0; height: 1px; background: var(--border);
+        }
+
+        .stats-panel {
+            flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
+            padding: 16px; display: flex; flex-direction: column; gap: 14px;
+            touch-action: pan-y;
+        }
+
+        .stat-group { display: flex; flex-direction: column; gap: 6px; }
+        .stat-label { font-size: 12px; color: var(--text-muted); font-weight: 500; }
+
+        .stat-input {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 10px; padding: 11px 14px;
+            color: var(--text); font-size: 15px; outline: none; width: 100%;
+            touch-action: auto;
+        }
+        .stat-input:focus { border-color: var(--primary); }
+        .stat-input[readonly] { opacity: 0.55; cursor: default; }
+
+        select.stat-input {
+            -webkit-appearance: none; appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23888' d='M6 8L0 0h12z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat; background-position: right 14px center;
+            padding-right: 38px; cursor: pointer;
+        }
+
+        .slider-row { display: flex; align-items: center; gap: 10px; }
+        .slider-row input[type=range] {
+            flex: 1; -webkit-appearance: none;
+            background: transparent; touch-action: pan-x;
+        }
+        .slider-row input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none; height: 22px; width: 22px;
+            border-radius: 50%; background: var(--text);
+            cursor: pointer; margin-top: -9px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+        }
+        .slider-row input[type=range]::-webkit-slider-runnable-track {
+            height: 4px; background: #444; border-radius: 2px; cursor: pointer;
+        }
+        .slider-value {
+            min-width: 44px; text-align: right;
+            font-size: 14px; font-weight: 600; color: var(--primary-light);
+        }
+
+        .toggle-row {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 12px 14px; background: var(--surface);
+            border-radius: 10px; border: 1px solid var(--border);
+        }
+        .toggle-label { font-size: 14px; }
+        .toggle-switch { position: relative; width: 50px; height: 28px; flex-shrink: 0; }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+        .toggle-track {
+            position: absolute; inset: 0; background: #444;
+            border-radius: 14px; cursor: pointer; transition: background 0.2s;
+        }
+        .toggle-track::after {
+            content: ''; position: absolute;
+            left: 4px; top: 4px; width: 20px; height: 20px;
+            border-radius: 50%; background: white; transition: transform 0.2s;
+        }
+        .toggle-switch input:checked + .toggle-track { background: var(--primary); }
+        .toggle-switch input:checked + .toggle-track::after { transform: translateX(22px); }
+
+        .info-text {
+            font-size: 13px; color: var(--text-muted);
+            padding: 10px 14px; background: var(--surface);
+            border-radius: 10px; border: 1px solid var(--border);
+        }
+
+        /* ======================================================
+           FLOATING CANVAS UI
+        ====================================================== */
+        .pinned-container {
+            position: absolute; top: 14px; left: 14px;
+            display: flex; align-items: center; gap: 10px; z-index: 50;
+        }
+
+        .palette-fab {
+            width: 50px; height: 50px; border-radius: 50%;
+            background: #ccc; border: 3px solid #333;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; overflow: hidden; flex-shrink: 0;
+        }
+        .palette-fab i { color: white; font-size: 24px; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.6)); }
+
+        .pinned-strip {
+            display: flex; gap: 8px; padding: 6px;
+            background: rgba(28,28,28,0.92); backdrop-filter: blur(12px);
+            border-radius: 28px; border: 1px solid var(--border);
+            max-width: 0; opacity: 0; overflow: hidden;
+            pointer-events: none;
+            transition: max-width 0.3s ease, opacity 0.3s ease, padding 0.3s ease;
+        }
+        .pinned-strip.visible { max-width: 100vw; opacity: 1; padding-right: 10px; pointer-events: auto; }
+
+        .pin-swatch {
+            width: 34px; height: 34px; border-radius: 50%;
+            border: 2px solid #555; flex-shrink: 0; cursor: pointer; position: relative;
+        }
+        .pin-swatch.active-swatch { border-color: white; transform: scale(1.15); }
+
+        .add-pin-btn {
+            width: 34px; height: 34px; border-radius: 50%;
+            background: #333; border: 1.5px dashed #666;
+            display: flex; align-items: center; justify-content: center;
+            color: #aaa; cursor: pointer; flex-shrink: 0;
+        }
+
+        .top-right-controls {
+            position: absolute; top: 14px; right: 14px;
+            display: flex; gap: 8px; z-index: 50;
+        }
+        .icon-btn {
+            width: 44px; height: 44px; border-radius: 50%;
+            background: #2a2a2a; border: 1px solid var(--border);
+            color: var(--text); display: flex; align-items: center;
+            justify-content: center; font-size: 18px; cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            transition: background 0.15s, opacity 0.15s;
+        }
+        .icon-btn:active { background: #444; }
+        .icon-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+        /* Radial menu */
+        .bottom-left-menu {
+            position: absolute; bottom: 18px; left: 14px;
+            z-index: 50; width: 56px; height: 56px;
+        }
+        .main-fab-btn {
+            width: 56px; height: 56px;
+            background: var(--text); color: #1a1a1a;
+            border-radius: 50%; border: none;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+            font-size: 26px; display: flex; align-items: center;
+            justify-content: center; cursor: pointer;
+            position: relative; z-index: 52;
+            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .main-fab-btn.open { transform: rotate(45deg); background: #ff5555; color: white; }
+
+        .radial-wheel-wrapper {
+            position: absolute; bottom: 28px; left: 28px;
+            width: 0; height: 0; pointer-events: none;
+            z-index: 51; opacity: 0;
+            transition: opacity 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .menu-open .radial-wheel-wrapper { opacity: 1; pointer-events: auto; }
+
+        .radial-wheel {
+            position: absolute; top: 0; left: 0;
+            width: 240px; height: 240px;
+            transform: translate(-50%, -50%) scale(0.5);
+            border-radius: 50%;
+            transition: transform 0.3s ease;
+            touch-action: none;
+        }
+        .menu-open .radial-wheel { transform: translate(-50%, -50%) scale(1); }
+
+        .radial-item {
+            position: absolute; width: 46px; height: 46px;
+            background: #333; color: var(--text);
+            border-radius: 50%; border: 1px solid var(--border);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.35);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 20px; cursor: pointer;
+            top: 50%; left: 50%; margin-top: -23px; margin-left: -23px;
+            transition: background 0.15s;
+        }
+        .radial-item.active { background: var(--primary); border-color: var(--primary-light); color: white; }
+        .radial-item:active { filter: brightness(1.2); }
+
+        /* ======================================================
+           DRAWERS (anchored inside canvas-area)
+        ====================================================== */
+        .bottom-drawer {
+            position: absolute; bottom: 0; left: 0; right: 0;
+            background: #1e1e1e; border-top-left-radius: 20px; border-top-right-radius: 20px;
+            box-shadow: 0 -4px 24px rgba(0,0,0,0.7);
+            padding: 22px; z-index: 100;
+            transform: translateY(100%);
+            transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+            display: flex; flex-direction: column; gap: 14px;
+            border-top: 1px solid var(--border);
+        }
+        .bottom-drawer.visible { transform: translateY(0); }
+
+        .drawer-header {
+            display: flex; justify-content: space-between;
+            align-items: center; font-weight: 600; font-size: 16px;
+        }
+        .close-btn {
+            background: none; border: none; font-size: 20px;
+            cursor: pointer; color: #aaa; padding: 5px; line-height: 1;
+        }
+        .close-btn:hover { color: white; }
+
+        .drawer-input {
+            width: 100%; border: 1px solid #444; border-radius: 10px;
+            padding: 12px; background: #1a1a1a; color: white;
+            font-family: monospace; font-size: 14px;
+            touch-action: auto;
+        }
+        .btn-primary {
+            background: var(--surface); color: white;
+            border: 1px solid var(--border); padding: 12px 18px;
+            border-radius: 10px; font-weight: 500; width: 100%;
+            cursor: pointer; font-size: 15px; transition: background 0.15s;
+        }
+        .btn-primary.accent { background: var(--primary); border: none; }
+        .btn-primary:active { filter: brightness(0.88); }
+
+        .slider-label { font-size: 12px; color: #888; margin-bottom: 4px; display: block; }
+        input[type=range] {
+            -webkit-appearance: none; width: 100%; background: transparent; margin-top: 8px;
+            touch-action: pan-x;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none; height: 16px; width: 16px;
+            border-radius: 50%; background: var(--text); cursor: pointer; margin-top: -6px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            height: 4px; cursor: pointer; background: #555; border-radius: 2px;
+        }
+
+        .bg-swatch-container { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+        .bg-swatch {
+            height: 42px; border-radius: 8px;
+            border: 2px solid var(--border); cursor: pointer;
+        }
+
+        /* ======================================================
+           COLOR PICKER OVERLAY
+        ====================================================== */
+        .picker-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.75); backdrop-filter: blur(5px);
+            z-index: 300; display: flex; align-items: center; justify-content: center;
+            opacity: 0; pointer-events: none; transition: opacity 0.2s;
+        }
+        .picker-overlay.active { opacity: 1; pointer-events: auto; }
+        .picker-card {
+            background: #242424; padding: 24px; border-radius: 20px;
+            box-shadow: 0 20px 30px rgba(0,0,0,0.6);
+            display: flex; flex-direction: column; align-items: center; gap: 20px;
+            border: 1px solid var(--border);
+        }
+
+        /* ======================================================
+           MODALS
+        ====================================================== */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.78); backdrop-filter: blur(6px);
+            z-index: 400; display: flex; align-items: flex-end; justify-content: center;
+            opacity: 0; pointer-events: none; transition: opacity 0.2s;
+        }
+        .modal-overlay.active { opacity: 1; pointer-events: auto; }
+
+        .modal-sheet {
+            background: var(--surface2); border-top-left-radius: 24px; border-top-right-radius: 24px;
+            padding: 24px; padding-bottom: max(24px, env(safe-area-inset-bottom));
+            width: 100%; max-height: 80vh;
+            display: flex; flex-direction: column; gap: 16px;
+            border-top: 1px solid var(--border);
+            box-shadow: 0 -8px 40px rgba(0,0,0,0.6);
+            transform: translateY(40px);
+            transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+        .modal-overlay.active .modal-sheet { transform: translateY(0); }
+
+        .modal-header { display: flex; justify-content: space-between; align-items: center; }
+        .modal-title { font-size: 18px; font-weight: 700; }
+
+        .modal-body {
+            overflow-y: auto; -webkit-overflow-scrolling: touch;
+            flex: 1; display: flex; flex-direction: column; gap: 10px;
+            touch-action: pan-y;
+        }
+
+        .project-list-item {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 14px; background: var(--surface);
+            border-radius: 12px; border: 1px solid var(--border); cursor: pointer;
+        }
+        .project-list-item:active { opacity: 0.75; }
+        .project-list-name { font-weight: 600; font-size: 15px; }
+        .project-list-meta { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
+
+        .delete-project-btn {
+            background: rgba(229,57,53,0.12); border: none;
+            color: #ff7070; padding: 8px 12px; border-radius: 8px;
+            font-size: 18px; cursor: pointer; flex-shrink: 0;
+        }
+
+        .modal-btn {
+            background: var(--surface); border: 1px solid var(--border);
+            color: var(--text); padding: 14px; border-radius: 12px;
+            font-size: 15px; font-weight: 500; cursor: pointer; width: 100%;
+            flex-shrink: 0;
+        }
+        .modal-btn.primary { background: var(--primary); border-color: var(--primary); }
+        .modal-btn:active { opacity: 0.75; }
+
+        /* Export success */
+        .ios-instructions {
+            background: rgba(59,133,38,0.15); border: 1px solid rgba(59,133,38,0.35);
+            border-radius: 10px; padding: 12px;
+            font-size: 13px; color: #a0d49a; line-height: 1.55;
+        }
+        .give-command {
+            background: #161616; border-radius: 8px;
+            padding: 10px 12px; font-family: monospace;
+            font-size: 13px; color: #7ec8e3;
+            display: flex; justify-content: space-between;
+            align-items: center; gap: 8px; word-break: break-all;
+        }
+        .copy-btn {
+            flex-shrink: 0; background: var(--surface);
+            border: 1px solid var(--border); color: var(--text);
+            padding: 6px 10px; border-radius: 6px; font-size: 12px; cursor: pointer;
+        }
+        .copy-btn:active { background: #444; }
+
+        /* ======================================================
+           DELETE CONFIRM OVERLAY
+        ====================================================== */
+        .delete-confirm-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.65); z-index: 450;
+            display: flex; align-items: center; justify-content: center;
+            opacity: 0; pointer-events: none; transition: opacity 0.2s;
+        }
+        .delete-confirm-overlay.active { opacity: 1; pointer-events: auto; }
+        .delete-confirm-card {
+            background: var(--surface2); border-radius: 20px;
+            padding: 28px 22px; margin: 24px; width: 100%; max-width: 320px;
+            display: flex; flex-direction: column; gap: 18px;
+            text-align: center; border: 1px solid var(--border);
+        }
+        .delete-confirm-title { font-size: 18px; font-weight: 700; }
+        .delete-confirm-msg { color: var(--text-muted); font-size: 14px; line-height: 1.5; }
+        .delete-confirm-actions { display: flex; gap: 10px; }
+        .btn-danger {
+            flex: 1; background: var(--danger); border: none; color: white;
+            padding: 14px; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer;
+        }
+        .btn-cancel {
+            flex: 1; background: var(--surface);
+            border: 1px solid var(--border); color: var(--text);
+            padding: 14px; border-radius: 12px; font-size: 15px; cursor: pointer;
+        }
+
+        /* ======================================================
+           TOAST
+        ====================================================== */
+        .toast {
+            position: fixed; bottom: 110px; left: 50%;
+            transform: translateX(-50%);
+            background: rgba(10,10,10,0.88); backdrop-filter: blur(4px);
+            color: white; padding: 10px 20px; border-radius: 20px;
+            font-size: 14px; pointer-events: none; z-index: 600;
+            white-space: nowrap;
+            animation: toastAnim 2s forwards;
+        }
+        @keyframes toastAnim {
+            0%   { opacity: 0; transform: translateX(-50%) translateY(6px); }
+            15%  { opacity: 1; transform: translateX(-50%) translateY(0); }
+            75%  { opacity: 1; }
+            100% { opacity: 0; }
+        }
+
+        /* ======================================================
+           SCROLLBAR
+        ====================================================== */
+        ::-webkit-scrollbar { width: 3px; height: 3px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #3a3a3a; border-radius: 2px; }
+    </style>
+</head>
+<body>
+
+<!-- ================================================================
+     SCREEN 1: HOME
+================================================================ -->
+<div id="screen-home" class="screen screen-active">
+    <div class="home-header">
+        <span class="home-title">⚔️ WeaponForge</span>
+        <input type="text" id="project-name" class="project-name-input" placeholder="My Project" autocomplete="off" spellcheck="false">
+    </div>
+
+    <div class="weapon-grid" id="weapon-grid">
+        <!-- populated by JS -->
+    </div>
+
+    <div class="home-actions">
+        <button class="action-btn primary" id="btn-export" disabled>📦 Export .mcaddon</button>
+        <button class="action-btn" id="btn-save">💾 Save Project</button>
+        <button class="action-btn" id="btn-load">📂 Load Project</button>
+        <button class="action-btn" id="btn-new-project">🗑️ New Project</button>
+    </div>
+</div>
+
+<!-- ================================================================
+     SCREEN 2: EDITOR
+================================================================ -->
+<div id="screen-editor" class="screen">
+    <div class="editor-topbar">
+        <button class="topbar-btn" id="btn-back">← Back</button>
+        <span class="editor-topbar-title" id="editor-weapon-title">Weapon</span>
+        <button class="topbar-btn primary" id="btn-save-weapon">💾 Save</button>
+    </div>
+
+    <!-- Canvas area -->
+    <div id="canvas-area">
+        <div id="canvas-wrapper">
+            <canvas id="c"></canvas>
+        </div>
+
+        <!-- Pinned color palette -->
+        <div class="pinned-container">
+            <div class="palette-fab" id="main-fab">
+                <i class="ph-fill ph-paint-brush-broad"></i>
+            </div>
+            <div class="pinned-strip" id="pinned-strip">
+                <div class="add-pin-btn" id="add-pin-trigger"><i class="ph ph-plus"></i></div>
+            </div>
+        </div>
+
+        <!-- Undo / Redo -->
+        <div class="top-right-controls">
+            <button class="icon-btn" id="undo-btn" disabled><i class="ph ph-arrow-u-up-left"></i></button>
+            <button class="icon-btn" id="redo-btn" disabled><i class="ph ph-arrow-u-up-right"></i></button>
+        </div>
+
+        <!-- Radial tool menu -->
+        <div class="bottom-left-menu" id="menu-container">
+            <div class="radial-wheel-wrapper">
+                <div class="radial-wheel" id="radial-wheel"></div>
+            </div>
+            <button class="main-fab-btn" id="main-add-btn"><i class="ph ph-plus"></i></button>
+        </div>
+
+        <!-- Onion skin drawer -->
+        <div class="bottom-drawer" id="onion-drawer">
+            <div class="drawer-header">
+                <span>👻 Trace Vanilla Item</span>
+                <button class="close-btn" id="close-onion"><i class="ph ph-x"></i></button>
+            </div>
+            <div>
+                <span class="slider-label">Onion Skin Opacity</span>
+                <input type="range" id="onion-opacity" min="0.1" max="1" step="0.1" value="0.5">
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:4px;">
+                <button class="btn-primary" data-onion="sword">🗡️ Sword</button>
+                <button class="btn-primary" data-onion="pickaxe">⛏️ Pickaxe</button>
+                <button class="btn-primary" data-onion="axe">🪓 Axe</button>
+                <button class="btn-primary" data-onion="shovel">🔨 Shovel</button>
+                <button class="btn-primary" data-onion="hoe">🌿 Hoe</button>
+                <button class="btn-primary" style="background:#555" data-onion="clear">✕ Clear</button>
+            </div>
+        </div>
+
+        <!-- Background color drawer -->
+        <div class="bottom-drawer" id="bg-drawer">
+            <div class="drawer-header">
+                <span>🖥 Visibility Background</span>
+                <button class="close-btn" id="close-bg"><i class="ph ph-x"></i></button>
+            </div>
+            <span class="slider-label">Does not affect exported texture.</span>
+            <div class="bg-swatch-container">
+                <div class="bg-swatch" style="background:#121212;" data-bg="#121212"></div>
+                <div class="bg-swatch" style="background:#555555;" data-bg="#555555"></div>
+                <div class="bg-swatch" style="background:#e0e0e0;" data-bg="#e0e0e0"></div>
+                <div class="bg-swatch" style="background:#00ff00;" data-bg="#00ff00"></div>
+            </div>
+        </div>
+    </div><!-- end #canvas-area -->
+
+    <div class="editor-divider"></div>
+
+    <!-- Stats panel -->
+    <div class="stats-panel" id="stats-panel">
+        <div class="stat-group">
+            <label class="stat-label">✏️ Display Name</label>
+            <input type="text" id="stat-display-name" class="stat-input" placeholder="Fire Sword" autocomplete="off">
+        </div>
+
+        <div class="stat-group">
+            <label class="stat-label">🔖 Internal ID (auto-generated)</label>
+            <input type="text" id="stat-internal-id" class="stat-input" readonly tabindex="-1">
+        </div>
+
+        <div class="stat-group">
+            <label class="stat-label">⚔️ Weapon Type</label>
+            <select id="stat-weapon-type" class="stat-input">
+                <option value="sword">🗡️ Sword</option>
+                <option value="pickaxe">⛏️ Pickaxe</option>
+                <option value="axe">🪓 Axe</option>
+                <option value="shovel">🔨 Shovel</option>
+                <option value="hoe">🌿 Hoe</option>
+            </select>
+        </div>
+
+        <div class="stat-group">
+            <label class="stat-label">💥 How hard it hits</label>
+            <div class="slider-row">
+                <input type="range" id="stat-damage" min="1" max="30" step="1" value="7">
+                <span class="slider-value" id="stat-damage-val">7</span>
+            </div>
+        </div>
+
+        <div class="stat-group">
+            <label class="stat-label">⚡ How fast it swings (cooldown in seconds)</label>
+            <div class="slider-row">
+                <input type="range" id="stat-cooldown" min="0.1" max="4.0" step="0.1" value="0.4">
+                <span class="slider-value" id="stat-cooldown-val">0.4s</span>
+            </div>
+        </div>
+
+        <div class="stat-group">
+            <label class="stat-label">🛡️ How long it lasts (durability)</label>
+            <div class="slider-row">
+                <input type="range" id="stat-durability" min="1" max="5000" step="1" value="500">
+                <span class="slider-value" id="stat-durability-val">500</span>
+            </div>
+        </div>
+
+        <div class="stat-group">
+            <label class="stat-label">📦 Max Stack Size</label>
+            <div class="info-text">Always 1 — weapons can't be stacked in Minecraft.</div>
+        </div>
+
+        <div class="stat-group">
+            <label class="stat-label">🔧 Repair Material</label>
+            <select id="stat-repair" class="stat-input">
+                <option value="">None</option>
+                <option value="Iron Ingot">Iron Ingot</option>
+                <option value="Gold Ingot">Gold Ingot</option>
+                <option value="Diamond">Diamond</option>
+                <option value="Netherite Ingot">Netherite Ingot</option>
+                <option value="Planks">Planks</option>
+                <option value="Cobblestone">Cobblestone</option>
+            </select>
+        </div>
+
+        <div class="stat-group">
+            <div class="toggle-row">
+                <span class="toggle-label">🤚 Can Use Off-hand</span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="stat-offhand">
+                    <span class="toggle-track"></span>
+                </label>
+            </div>
+        </div>
+
+        <div style="height:16px;flex-shrink:0;"></div>
+    </div><!-- end .stats-panel -->
+</div><!-- end #screen-editor -->
+
+<!-- ================================================================
+     COLOR PICKER OVERLAY
+================================================================ -->
+<div class="picker-overlay" id="picker-overlay">
+    <div class="picker-card" id="picker-card">
+        <div id="iro-container"></div>
+        <button class="btn-primary accent" id="confirm-pin-btn" style="width:100%;">Select Color</button>
+    </div>
+</div>
+
+<!-- ================================================================
+     LOAD PROJECT MODAL
+================================================================ -->
+<div class="modal-overlay" id="modal-load">
+    <div class="modal-sheet">
+        <div class="modal-header">
+            <span class="modal-title">📂 Load Project</span>
+            <button class="close-btn" id="close-modal-load"><i class="ph ph-x"></i></button>
+        </div>
+        <div class="modal-body" id="project-list"></div>
+        <button class="modal-btn" id="close-load-btn">Cancel</button>
+    </div>
+</div>
+
+<!-- ================================================================
+     EXPORT SUCCESS MODAL
+================================================================ -->
+<div class="modal-overlay" id="modal-export-success">
+    <div class="modal-sheet">
+        <div class="modal-header">
+            <span class="modal-title">✅ Pack Exported!</span>
+            <button class="close-btn" id="close-modal-export"><i class="ph ph-x"></i></button>
+        </div>
+        <div class="modal-body" id="export-success-body"></div>
+        <button class="modal-btn primary" id="close-export-btn">Done</button>
+    </div>
+</div>
+
+<!-- ================================================================
+     DELETE WEAPON CONFIRM
+================================================================ -->
+<div class="delete-confirm-overlay" id="delete-confirm-overlay">
+    <div class="delete-confirm-card">
+        <div class="delete-confirm-title">🗑️ Delete Weapon?</div>
+        <div class="delete-confirm-msg" id="delete-confirm-msg">This cannot be undone.</div>
+        <div class="delete-confirm-actions">
+            <button class="btn-cancel" id="delete-cancel-btn">Cancel</button>
+            <button class="btn-danger" id="delete-confirm-btn">Delete</button>
+        </div>
+    </div>
+</div>
+
+<!-- ================================================================
+     GENERIC CONFIRM DIALOG
+================================================================ -->
+<div class="delete-confirm-overlay" id="generic-confirm-overlay">
+    <div class="delete-confirm-card">
+        <div class="delete-confirm-title" id="generic-confirm-title">Are you sure?</div>
+        <div class="delete-confirm-msg"   id="generic-confirm-msg"></div>
+        <div class="delete-confirm-actions">
+            <button class="btn-cancel" id="generic-cancel-btn">Cancel</button>
+            <button class="btn-danger" id="generic-ok-btn">OK</button>
+        </div>
+    </div>
+</div>
+
+<script>
+'use strict';
+
+/* ================================================================
+   INDEXED DB WRAPPER
+================================================================ */
+const DB = {
+    _db: null,
+
+    open() {
+        return new Promise((resolve, reject) => {
+            const req = indexedDB.open('weaponforge-db', 1);
+            req.onupgradeneeded = e => e.target.result.createObjectStore('projects', { keyPath: 'id' });
+            req.onsuccess  = e => { this._db = e.target.result; resolve(); };
+            req.onerror    = e => reject(e.target.error);
+        });
+    },
+
+    put(project) {
+        return new Promise((resolve, reject) => {
+            const tx = this._db.transaction('projects', 'readwrite');
+            tx.objectStore('projects').put(project);
+            tx.oncomplete = resolve;
+            tx.onerror    = e => reject(e.target.error);
+        });
+    },
+
+    getAll() {
+        return new Promise((resolve, reject) => {
+            const tx  = this._db.transaction('projects', 'readonly');
+            const req = tx.objectStore('projects').getAll();
+            req.onsuccess = e => resolve(e.target.result);
+            req.onerror   = e => reject(e.target.error);
+        });
+    },
+
+    remove(id) {
+        return new Promise((resolve, reject) => {
+            const tx = this._db.transaction('projects', 'readwrite');
+            tx.objectStore('projects').delete(id);
+            tx.oncomplete = resolve;
+            tx.onerror    = e => reject(e.target.error);
+        });
+    }
+};
+
+/* ================================================================
+   MOBILE-FRIENDLY CONFIRM DIALOG
+================================================================ */
+let _gcResolve = null;
+
+function wfConfirm(title, msg, okLabel = 'OK', danger = false) {
+    return new Promise(resolve => {
+        _gcResolve = resolve;
+        document.getElementById('generic-confirm-title').textContent = title;
+        document.getElementById('generic-confirm-msg').textContent   = msg || '';
+        const okBtn = document.getElementById('generic-ok-btn');
+        okBtn.textContent = okLabel;
+        okBtn.className   = danger ? 'btn-danger' : 'btn-cancel';
+        document.getElementById('generic-confirm-overlay').classList.add('active');
+    });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('generic-ok-btn').addEventListener('click', () => {
+        document.getElementById('generic-confirm-overlay').classList.remove('active');
+        if (_gcResolve) { _gcResolve(true); _gcResolve = null; }
+    });
+    document.getElementById('generic-cancel-btn').addEventListener('click', () => {
+        document.getElementById('generic-confirm-overlay').classList.remove('active');
+        if (_gcResolve) { _gcResolve(false); _gcResolve = null; }
+    });
+    document.getElementById('generic-confirm-overlay').addEventListener('click', e => {
+        if (e.target === e.currentTarget) {
+            document.getElementById('generic-confirm-overlay').classList.remove('active');
+            if (_gcResolve) { _gcResolve(false); _gcResolve = null; }
+        }
+    });
+});
+
+/* ================================================================
+   CONSTANTS
+================================================================ */
+const WEAPON_TYPE_ICONS = { sword:'🗡️', pickaxe:'⛏️', axe:'🪓', shovel:'🔨', hoe:'🌿' };
+
+const WEAPON_DEFAULTS = {
+    sword:   { damage:7,  cooldown:0.4, durability:500, repairMaterial:'Iron Ingot' },
+    pickaxe: { damage:5,  cooldown:0.8, durability:500, repairMaterial:'Iron Ingot' },
+    axe:     { damage:9,  cooldown:1.2, durability:500, repairMaterial:'Iron Ingot' },
+    shovel:  { damage:4,  cooldown:0.6, durability:500, repairMaterial:'Iron Ingot' },
+    hoe:     { damage:2,  cooldown:0.4, durability:500, repairMaterial:'Iron Ingot' },
+};
+
+const REPAIR_MAP = {
+    'Iron Ingot':'iron_ingot', 'Gold Ingot':'gold_ingot',
+    'Diamond':'diamond',       'Netherite Ingot':'netherite_ingot',
+    'Planks':'planks',         'Cobblestone':'cobblestone',
+};
+
+/* ================================================================
+   APP STATE
+================================================================ */
+const AppState = {
+    currentProject:   null,
+    editingWeaponId:  null,
+    activeColor: localStorage.getItem('wf_color') || 'rgba(57,181,230,1)',
+    pinnedColors: (() => {
+        try { return JSON.parse(localStorage.getItem('wf_pinned')) || null; } catch(_) { return null; }
+    })() || [
+        'rgba(57,181,230,1)', 'rgba(46,179,168,1)', 'rgba(92,92,92,1)',
+        'rgba(97,63,35,1)',   'rgba(255,255,255,1)', 'rgba(0,0,0,1)'
+    ],
+    currentTool: 'pencil',
+
+    saveColors() {
+        localStorage.setItem('wf_color',  this.activeColor);
+        localStorage.setItem('wf_pinned', JSON.stringify(this.pinnedColors));
+    }
+};
+
+/* ================================================================
+   HELPERS
+================================================================ */
+function genId()      { return crypto.randomUUID(); }
+function emptyPixels(){ return Array.from({length:16}, () => Array(16).fill('transparent')); }
+
+function genInternalId(name) {
+    return (name || '').toLowerCase()
+        .replace(/\s+/g, '_')
+        .replace(/[^a-z0-9_]/g, '')
+        .replace(/^_+|_+$/g, '') || 'weapon';
+}
+
+function showToast(msg, ms = 2200) {
+    const el = document.createElement('div');
+    el.className = 'toast';
+    el.textContent = msg;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), ms);
+}
+
+function makeWeapon(type = 'sword') {
+    const d = WEAPON_DEFAULTS[type];
+    return {
+        id: genId(), displayName: 'New Weapon',
+        internalId: 'new_weapon', weaponType: type,
+        damage: d.damage, cooldown: d.cooldown,
+        durability: d.durability, repairMaterial: d.repairMaterial,
+        allowOffHand: false, pixelData: emptyPixels(),
+        createdAt: Date.now(), updatedAt: Date.now()
+    };
+}
+
+function makeProject() {
+    return {
+        id: genId(), name: 'My Project',
+        namespace: 'weaponforge', weapons: [],
+        rpUUID: genId(), bpUUID: genId(),
+        createdAt: Date.now(), updatedAt: Date.now()
+    };
+}
+
+/* ================================================================
+   PIXEL DATA → PNG base64  (works without canvas manager being active)
+================================================================ */
+function pixelsToPng(pixelData, size = 16) {
+    const c   = document.createElement('canvas');
+    c.width   = size; c.height = size;
+    const ctx = c.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    const scale = size / 16;
+    for (let y = 0; y < 16; y++) {
+        for (let x = 0; x < 16; x++) {
+            const fill = pixelData[y][x];
+            if (fill && fill !== 'transparent') {
+                ctx.fillStyle = fill;
+                ctx.fillRect(
+                    Math.round(x * scale), Math.round(y * scale),
+                    Math.max(1, Math.round(scale)), Math.max(1, Math.round(scale))
+                );
+            }
+        }
+    }
+    return c.toDataURL('image/png').split(',')[1];
+}
+
+function drawPreview(pixelData, canvas) {
+    const ctx   = canvas.getContext('2d');
+    const scale = canvas.width / 16;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    for (let y = 0; y < 16; y++) {
+        for (let x = 0; x < 16; x++) {
+            const fill = pixelData[y][x];
+            if (fill && fill !== 'transparent') {
+                ctx.fillStyle = fill;
+                ctx.fillRect(x * scale, y * scale, scale, scale);
+            }
+        }
+    }
+}
+
+/* ================================================================
+   CANVAS MANAGER
+================================================================ */
+class CanvasManager {
+    constructor() {
+        this.canvas   = null;
+        this.pixels   = [];
+        this.isPainting = false;
+        this.stateChangedThisStroke = false;
+        this.onionSkin = null;
+        this.undoStack = [];
+        this.redoStack = [];
+        this._ready    = false;
+    }
+
+    init() {
+        if (this._ready) { this.resize(); return; }
+
+        this.canvas = new fabric.Canvas('c', {
+            selection: false,
+            defaultCursor: 'crosshair',
+            preserveObjectStacking: true,
+            fireRightClick: true,
+            stopContextMenu: true
+        });
+
+        this._buildGrid();
+        this._bindEvents();
+        this.saveState();
+        this._ready = true;
+    }
+
+    resize() {
+        if (!this.canvas) return;
+        const w = document.getElementById('canvas-wrapper');
+        if (!w) return;
+        this.canvas.setWidth(w.clientWidth);
+        this.canvas.setHeight(w.clientHeight);
+        this._centerGrid();
+    }
+
+    _buildGrid() {
+        const ps = 20;
+        for (let y = 0; y < 16; y++) {
+            this.pixels[y] = [];
+            for (let x = 0; x < 16; x++) {
+                const r = new fabric.Rect({
+                    left: x * ps, top: y * ps, width: ps, height: ps,
+                    fill: 'transparent',
+                    stroke: 'rgba(255,255,255,0.08)', strokeWidth: 1,
+                    selectable: false, hoverCursor: 'crosshair',
+                    data: { x, y }
+                });
+                this.pixels[y][x] = r;
+                this.canvas.add(r);
+            }
+        }
+        this._centerGrid();
+    }
+
+    _centerGrid() {
+        if (!this.canvas) return;
+        const gridPx = 16 * 20;
+        const scale  = Math.min(this.canvas.width, this.canvas.height) / (gridPx * 1.4);
+        this.canvas.setViewportTransform([
+            scale, 0, 0, scale,
+            (this.canvas.width  - gridPx * scale) / 2,
+            (this.canvas.height - gridPx * scale) / 2
+        ]);
+    }
+
+    _bindEvents() {
+        this.canvas.on('mouse:down', o => {
+            if (!o.target) return;
+            this.isPainting = true;
+            this.stateChangedThisStroke = false;
+            this._paint(o.target);
+        });
+        this.canvas.on('mouse:over', o => {
+            if (this.isPainting && o.target) this._paint(o.target);
+        });
+        this.canvas.on('mouse:up', () => {
+            this.isPainting = false;
+            if (this.stateChangedThisStroke) this.saveState();
+        });
+    }
+
+    /* ---- history ---- */
+    _snapshot() { return this.pixels.map(row => row.map(r => r.fill)); }
+
+    _applySnapshot(snap) {
+        for (let y = 0; y < 16; y++) {
+            for (let x = 0; x < 16; x++) {
+                this._setPixel(this.pixels[y][x], snap[y][x]);
+            }
+        }
+        this.canvas.requestRenderAll();
+    }
+
+    saveState() {
+        this.undoStack.push(this._snapshot());
+        this.redoStack = [];
+        if (this.undoStack.length > 50) this.undoStack.shift();
+        document.dispatchEvent(new CustomEvent('history-changed'));
+    }
+
+    undo() {
+        if (this.undoStack.length <= 1) return;
+        this.redoStack.push(this.undoStack.pop());
+        this._applySnapshot(this.undoStack[this.undoStack.length - 1]);
+        document.dispatchEvent(new CustomEvent('history-changed'));
+    }
+
+    redo() {
+        if (!this.redoStack.length) return;
+        const s = this.redoStack.pop();
+        this.undoStack.push(s);
+        this._applySnapshot(s);
+        document.dispatchEvent(new CustomEvent('history-changed'));
+    }
+
+    /* ---- painting ---- */
+    _setPixel(rect, color) {
+        rect.set('fill',   color);
+        rect.set('stroke', color === 'transparent' ? 'rgba(255,255,255,0.08)' : 'transparent');
+    }
+
+    _tint(colorStr, amt) {
+        if (!colorStr || colorStr === 'transparent') return 'transparent';
+        const s = new fabric.Color(colorStr).getSource();
+        const clamp = v => Math.max(0, Math.min(255, v));
+        return `rgba(${clamp(s[0]+amt)},${clamp(s[1]+amt)},${clamp(s[2]+amt)},${s[3]})`;
+    }
+
+    _paint(rect) {
+        if (!rect || !rect.data) return;
+        const old  = rect.fill;
+        const tool = AppState.currentTool;
+
+        if (tool === 'picker') {
+            if (old !== 'transparent') {
+                AppState.activeColor = old;
+                AppState.saveColors();
+                document.dispatchEvent(new CustomEvent('color-picked'));
+            }
+            return;
+        }
+        if (tool === 'fill') {
+            this._floodFill(rect.data.x, rect.data.y, AppState.activeColor);
+            return;
+        }
+
+        let next = old;
+        if      (tool === 'pencil')  next = AppState.activeColor;
+        else if (tool === 'eraser')  next = 'transparent';
+        else if (tool === 'lighten') next = this._tint(old,  25);
+        else if (tool === 'darken')  next = this._tint(old, -25);
+
+        if (next !== old) {
+            this._setPixel(rect, next);
+            this.stateChangedThisStroke = true;
+            this.canvas.requestRenderAll();
+        }
+    }
+
+    _floodFill(sx, sy, fillColor) {
+        const target  = this.pixels[sy][sx].fill;
+        if (target === fillColor) return;
+        const stack   = [[sx, sy]];
+        const visited = new Set();
+        let changed   = false;
+        while (stack.length) {
+            const [x, y] = stack.pop();
+            if (x < 0 || x >= 16 || y < 0 || y >= 16) continue;
+            const key = y * 16 + x;
+            if (visited.has(key)) continue;
+            if (this.pixels[y][x].fill !== target) continue;
+            visited.add(key);
+            this._setPixel(this.pixels[y][x], fillColor);
+            changed = true;
+            stack.push([x+1,y],[x-1,y],[x,y+1],[x,y-1]);
+        }
+        if (changed) { this.canvas.requestRenderAll(); this.saveState(); }
+    }
+
+    clearGrid() {
+        for (let y = 0; y < 16; y++)
+            for (let x = 0; x < 16; x++)
+                this._setPixel(this.pixels[y][x], 'transparent');
+        this.canvas.requestRenderAll();
+        this.saveState();
+    }
+
+    loadPixels(pixelData) {
+        for (let y = 0; y < 16; y++) {
+            for (let x = 0; x < 16; x++) {
+                const c = (pixelData && pixelData[y] && pixelData[y][x]) ? pixelData[y][x] : 'transparent';
+                this._setPixel(this.pixels[y][x], c);
+            }
+        }
+        this.canvas.requestRenderAll();
+        this.undoStack = [this._snapshot()];
+        this.redoStack = [];
+        document.dispatchEvent(new CustomEvent('history-changed'));
+    }
+
+    extractPixels() {
+        return this.pixels.map(row => row.map(r => r.fill));
+    }
+
+    /* ---- onion skin ---- */
+    setOnionSkin(url) {
+        this.clearOnionSkin();
+        if (!url) return;
+        fabric.Image.fromURL(url, img => {
+            img.scaleToWidth(16 * 20);
+            img.set({
+                left: 0, top: 0,
+                opacity: parseFloat(document.getElementById('onion-opacity').value) || 0.5,
+                selectable: false, evented: false, excludeFromExport: true,
+                imageSmoothing: false
+            });
+            this.canvas.add(img);
+            img.sendToBack();
+            this.onionSkin = img;
+            this.canvas.requestRenderAll();
+        }, { crossOrigin: 'anonymous' }); // crossOrigin prevents CORS-tainted canvas when loading external GitHub textures
+    }
+
+    clearOnionSkin() {
+        if (this.onionSkin) {
+            this.canvas.remove(this.onionSkin);
+            this.onionSkin = null;
+            this.canvas.requestRenderAll();
+        }
+    }
+}
+
+/* ================================================================
+   HOME SCREEN RENDERING
+================================================================ */
+function renderHome() {
+    const p    = AppState.currentProject;
+    const grid = document.getElementById('weapon-grid');
+    grid.innerHTML = '';
+    if (!p) return;
+
+    document.getElementById('project-name').value = p.name;
+
+    p.weapons.forEach(weapon => {
+        const card = document.createElement('div');
+        card.className = 'weapon-card';
+        card.dataset.id = weapon.id;
+
+        const preview = document.createElement('canvas');
+        preview.className = 'weapon-preview-canvas';
+        preview.width  = 64; preview.height = 64;
+        drawPreview(weapon.pixelData, preview);
+
+        const icon = WEAPON_TYPE_ICONS[weapon.weaponType] || '⚔️';
+
+        card.innerHTML = `
+            <div class="damage-badge">💥 ${weapon.damage}</div>
+        `;
+        card.insertAdjacentElement('afterbegin', preview);
+
+        const info = document.createElement('div');
+        info.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:4px;width:100%;';
+        info.innerHTML = `
+            <div class="weapon-card-name">${escHtml(weapon.displayName)}</div>
+            <div class="weapon-card-meta"><span>${icon}</span><span style="font-size:11px;color:var(--text-muted)">${weapon.weaponType}</span></div>
+        `;
+        card.appendChild(info);
+
+        /* Long-press → delete confirm */
+        let pressTimer;
+        let didLongPress = false;
+        card.addEventListener('touchstart', () => {
+            didLongPress = false;
+            pressTimer = setTimeout(() => {
+                didLongPress = true;
+                showDeleteConfirm(weapon.id, weapon.displayName);
+            }, 600);
+        }, { passive: true });
+        card.addEventListener('touchend',   () => clearTimeout(pressTimer));
+        card.addEventListener('touchmove',  () => clearTimeout(pressTimer), { passive: true });
+        card.addEventListener('click',      () => { if (!didLongPress) openEditor(weapon.id); });
+
+        grid.appendChild(card);
+    });
+
+    /* "+ New Weapon" card */
+    const addCard = document.createElement('div');
+    addCard.className = 'weapon-card add-weapon-card';
+    addCard.innerHTML = `<div class="add-icon">+</div><div class="weapon-card-name">New Weapon</div>`;
+    addCard.addEventListener('click', () => {
+        const w = makeWeapon('sword');
+        AppState.currentProject.weapons.push(w);
+        openEditor(w.id);
+    });
+    grid.appendChild(addCard);
+
+    document.getElementById('btn-export').disabled = p.weapons.length === 0;
+}
+
+function escHtml(s) {
+    return String(s)
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ================================================================
+   DELETE WEAPON CONFIRM
+================================================================ */
+let _pendingDeleteId = null;
+
+function showDeleteConfirm(weaponId, name) {
+    _pendingDeleteId = weaponId;
+    document.getElementById('delete-confirm-msg').textContent =
+        `Delete "${name}"? This cannot be undone.`;
+    document.getElementById('delete-confirm-overlay').classList.add('active');
+}
+function hideDeleteConfirm() {
+    _pendingDeleteId = null;
+    document.getElementById('delete-confirm-overlay').classList.remove('active');
+}
+
+/* ================================================================
+   SCREEN NAVIGATION
+================================================================ */
+let cm = null; // CanvasManager singleton
+let editorReady = false;
+
+function navigateTo(screenId, fromScreenId) {
+    document.getElementById(fromScreenId).classList.remove('screen-active');
+    document.getElementById(screenId).classList.add('screen-active');
+
+    if (screenId === 'screen-editor') {
+        setTimeout(() => {
+            if (!cm) {
+                cm = new CanvasManager();
+                cm.init();
+                bindEditorEvents();
+            } else {
+                cm.resize();
+            }
+        }, 60);
+    }
+}
+
+function navigateBack() {
+    if (AppState.editingWeaponId && cm && cm._ready) {
+        saveCurrentWeapon(/* quiet */ true);
+    }
+    document.getElementById('screen-editor').classList.remove('screen-active');
+    document.getElementById('screen-home').classList.add('screen-active');
+    AppState.editingWeaponId = null;
+    renderHome();
+}
+
+/* ================================================================
+   EDITOR – OPEN / SAVE
+================================================================ */
+function openEditor(weaponId) {
+    const p      = AppState.currentProject;
+    const weapon = p.weapons.find(w => w.id === weaponId);
+    if (!weapon) return;
+
+    AppState.editingWeaponId = weaponId;
+
+    /* Populate stats */
+    const dn = document.getElementById('stat-display-name');
+    dn.value = weapon.displayName;
+    document.getElementById('stat-internal-id').value  = weapon.internalId;
+    document.getElementById('stat-weapon-type').value  = weapon.weaponType;
+    document.getElementById('stat-damage').value       = weapon.damage;
+    document.getElementById('stat-damage-val').textContent   = weapon.damage;
+    document.getElementById('stat-cooldown').value     = weapon.cooldown;
+    document.getElementById('stat-cooldown-val').textContent = weapon.cooldown.toFixed(1) + 's';
+    document.getElementById('stat-durability').value   = weapon.durability;
+    document.getElementById('stat-durability-val').textContent = weapon.durability;
+    document.getElementById('stat-repair').value       = weapon.repairMaterial || '';
+    document.getElementById('stat-offhand').checked    = weapon.allowOffHand || false;
+    document.getElementById('editor-weapon-title').textContent = weapon.displayName;
+
+    navigateTo('screen-editor', 'screen-home');
+
+    /* Load pixels once canvas is initialised */
+    setTimeout(() => {
+        if (cm && cm._ready) cm.loadPixels(weapon.pixelData);
+    }, 120);
+}
+
+function saveCurrentWeapon(quiet = false) {
+    if (!AppState.editingWeaponId || !AppState.currentProject) return;
+    const p      = AppState.currentProject;
+    const weapon = p.weapons.find(w => w.id === AppState.editingWeaponId);
+    if (!weapon) return;
+
+    const displayName      = (document.getElementById('stat-display-name').value || '').trim() || 'My Weapon';
+    weapon.displayName     = displayName;
+    weapon.internalId      = genInternalId(displayName);
+    weapon.weaponType      = document.getElementById('stat-weapon-type').value;
+    weapon.damage          = parseInt(document.getElementById('stat-damage').value,    10);
+    weapon.cooldown        = parseFloat(document.getElementById('stat-cooldown').value);
+    weapon.durability      = parseInt(document.getElementById('stat-durability').value, 10);
+    weapon.repairMaterial  = document.getElementById('stat-repair').value;
+    weapon.allowOffHand    = document.getElementById('stat-offhand').checked;
+    weapon.pixelData       = cm ? cm.extractPixels() : weapon.pixelData;
+    weapon.updatedAt       = Date.now();
+    p.updatedAt            = Date.now();
+
+    document.getElementById('editor-weapon-title').textContent = displayName;
+    if (!quiet) showToast('💾 Weapon saved!');
+}
+
+/* ================================================================
+   EDITOR EVENTS  (bound once after canvas init)
+================================================================ */
+function bindEditorEvents() {
+    if (editorReady) return;
+    editorReady = true;
+
+    /* --- Stats panel wiring --- */
+    const dnInput = document.getElementById('stat-display-name');
+    dnInput.addEventListener('input', () => {
+        document.getElementById('stat-internal-id').value = genInternalId(dnInput.value);
+        document.getElementById('editor-weapon-title').textContent = dnInput.value || 'Weapon';
+    });
+
+    document.getElementById('stat-weapon-type').addEventListener('change', function() {
+        const d = WEAPON_DEFAULTS[this.value];
+        if (!d) return;
+        document.getElementById('stat-damage').value       = d.damage;
+        document.getElementById('stat-damage-val').textContent   = d.damage;
+        document.getElementById('stat-cooldown').value     = d.cooldown;
+        document.getElementById('stat-cooldown-val').textContent = d.cooldown.toFixed(1) + 's';
+        document.getElementById('stat-durability').value   = d.durability;
+        document.getElementById('stat-durability-val').textContent = d.durability;
+        document.getElementById('stat-repair').value       = d.repairMaterial;
+    });
+
+    document.getElementById('stat-damage').addEventListener('input', function() {
+        document.getElementById('stat-damage-val').textContent = this.value;
+    });
+    document.getElementById('stat-cooldown').addEventListener('input', function() {
+        document.getElementById('stat-cooldown-val').textContent = parseFloat(this.value).toFixed(1) + 's';
+    });
+    document.getElementById('stat-durability').addEventListener('input', function() {
+        document.getElementById('stat-durability-val').textContent = this.value;
+    });
+
+    /* --- Undo/Redo --- */
+    document.getElementById('undo-btn').addEventListener('click', () => cm.undo());
+    document.getElementById('redo-btn').addEventListener('click', () => cm.redo());
+    document.addEventListener('history-changed', () => {
+        document.getElementById('undo-btn').disabled = cm.undoStack.length <= 1;
+        document.getElementById('redo-btn').disabled = cm.redoStack.length === 0;
+    });
+
+    /* --- Color events --- */
+    document.addEventListener('color-picked', () => { updateFab(); renderStrip(); });
+    document.getElementById('main-fab').addEventListener('click', () => {
+        document.getElementById('pinned-strip').classList.toggle('visible');
+    });
+    document.getElementById('add-pin-trigger').addEventListener('click', e => {
+        e.stopPropagation(); openColorPicker();
+    });
+
+    /* --- Drawers --- */
+    document.getElementById('close-onion').addEventListener('click', () =>
+        document.getElementById('onion-drawer').classList.remove('visible'));
+    document.getElementById('close-bg').addEventListener('click', () =>
+        document.getElementById('bg-drawer').classList.remove('visible'));
+
+    document.querySelectorAll('[data-bg]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.getElementById('canvas-area').style.background = btn.dataset.bg;
+            document.getElementById('bg-drawer').classList.remove('visible');
+        });
+    });
+
+    document.getElementById('onion-opacity').addEventListener('input', function() {
+        if (cm && cm.onionSkin) {
+            cm.onionSkin.set('opacity', parseFloat(this.value));
+            cm.canvas.requestRenderAll();
+        }
+    });
+    document.querySelectorAll('[data-onion]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const type = btn.dataset.onion;
+            if (type === 'clear') { cm.clearOnionSkin(); }
+            else {
+                const url = `https://raw.githubusercontent.com/InventivetalentDev/minecraft-assets/1.20.1/assets/minecraft/textures/item/stone_${type}.png`;
+                cm.setOnionSkin(url);
+            }
+            document.getElementById('onion-drawer').classList.remove('visible');
+        });
+    });
+
+    /* --- Canvas-area dismiss on tap --- */
+    ['mousedown','touchstart'].forEach(ev => {
+        document.getElementById('canvas-wrapper').addEventListener(ev, dismissOverlays, { passive: true });
+    });
+
+    /* --- Back & save --- */
+    document.getElementById('btn-back').addEventListener('click', navigateBack);
+    document.getElementById('btn-save-weapon').addEventListener('click', () => {
+        saveCurrentWeapon();
+        saveProject();
+    });
+
+    /* --- Prevent iOS bounce on canvas --- */
+    document.getElementById('canvas-area').addEventListener('touchmove', e => {
+        if (e.target.tagName === 'CANVAS') e.preventDefault();
+    }, { passive: false });
+
+    /* --- Radial menu --- */
+    buildRadialMenu();
+
+    /* --- Initial strip --- */
+    updateFab();
+    renderStrip();
+}
+
+function dismissOverlays() {
+    const mc = document.getElementById('menu-container');
+    if (mc.classList.contains('menu-open')) toggleRadial();
+    document.getElementById('pinned-strip').classList.remove('visible');
+    document.getElementById('onion-drawer').classList.remove('visible');
+    document.getElementById('bg-drawer').classList.remove('visible');
+}
+
+/* ================================================================
+   RADIAL MENU
+================================================================ */
+const TOOLS = [
+    { id:'pencil',     icon:'ph-pencil-simple', label:'Pencil'     },
+    { id:'eraser',     icon:'ph-eraser',         label:'Eraser'     },
+    { id:'fill',       icon:'ph-paint-bucket',   label:'Fill'       },
+    { id:'picker',     icon:'ph-eyedropper',     label:'Eyedropper' },
+    { id:'lighten',    icon:'ph-sun',            label:'Lighten'    },
+    { id:'darken',     icon:'ph-moon',           label:'Darken'     },
+    { id:'ghost',      icon:'ph-ghost',          label:'Trace'      },
+    { id:'background', icon:'ph-monitor',        label:'Background' },
+    { id:'clear',      icon:'ph-trash',          label:'Clear'      },
+];
+
+const radState = { cur: 0, tgt: 0, dragging: false, raf: null };
+
+function buildRadialMenu() {
+    const wheel = document.getElementById('radial-wheel');
+    wheel.innerHTML = TOOLS.map(t =>
+        `<div class="radial-item" data-action="${t.id}" title="${t.label}"><i class="ph ${t.icon}"></i></div>`
+    ).join('');
+
+    const items  = wheel.querySelectorAll('.radial-item');
+    const R      = 95;
+    const step   = (2 * Math.PI) / items.length;
+
+    items.forEach((item, i) => {
+        const angle = (i * step) - (Math.PI / 2);
+        item.dataset.baseAngle = angle;
+        item.style.transform   = `translate(${R * Math.cos(angle)}px,${R * Math.sin(angle)}px)`;
+        item.addEventListener('click', e => {
+            e.stopPropagation();
+            if (!radState.dragging) handleTool(item.dataset.action);
+        });
+    });
+
+    /* Touch rotation */
+    let startA = 0, lastTgt = 0;
+    const getA = (x, y) => {
+        const r  = wheel.getBoundingClientRect();
+        return Math.atan2(y - (r.top + r.height/2), x - (r.left + r.width/2)) * (180/Math.PI);
+    };
+    wheel.addEventListener('touchstart', e => {
+        radState.dragging = false;
+        startA   = getA(e.touches[0].clientX, e.touches[0].clientY);
+        lastTgt  = radState.tgt;
+        if (!radState.raf) animateRadial();
+    }, { passive: true });
+    wheel.addEventListener('touchmove', e => {
+        e.preventDefault();
+        radState.dragging = true;
+        radState.tgt = lastTgt + (getA(e.touches[0].clientX, e.touches[0].clientY) - startA);
+    }, { passive: false });
+    wheel.addEventListener('touchend', () => { setTimeout(() => { radState.dragging = false; }, 50); });
+
+    document.getElementById('main-add-btn').addEventListener('click', toggleRadial);
+    markActiveTool();
+}
+
+function animateRadial() {
+    radState.cur += (radState.tgt - radState.cur) * 0.15;
+    const off = radState.cur * (Math.PI / 180);
+    const R   = 95;
+    document.querySelectorAll('.radial-item').forEach(item => {
+        const a = parseFloat(item.dataset.baseAngle) + off;
+        item.style.transform = `translate(${R * Math.cos(a)}px,${R * Math.sin(a)}px)`;
+    });
+    const still = Math.abs(radState.tgt - radState.cur) < 0.05;
+    const open  = document.getElementById('menu-container').classList.contains('menu-open');
+    if (!still || radState.dragging || open) {
+        radState.raf = requestAnimationFrame(animateRadial);
+    } else {
+        radState.raf = null;
+    }
+}
+
+function toggleRadial() {
+    const mc   = document.getElementById('menu-container');
+    const open = mc.classList.toggle('menu-open');
+    document.getElementById('main-add-btn').classList.toggle('open');
+    if (open && !radState.raf) animateRadial();
+}
+
+function handleTool(action) {
+    toggleRadial();
+    if (action === 'ghost') {
+        document.getElementById('onion-drawer').classList.add('visible');
+    } else if (action === 'background') {
+        document.getElementById('bg-drawer').classList.add('visible');
+    } else if (action === 'clear') {
+        wfConfirm('🗑️ Clear Canvas?', 'This will erase all pixels. Cannot be undone.', 'Clear', true)
+            .then(ok => { if (ok && cm) cm.clearGrid(); });
+    } else {
+        AppState.currentTool = action;
+        markActiveTool();
+        showToast(TOOLS.find(t => t.id === action)?.label || action);
+    }
+}
+
+function markActiveTool() {
+    document.querySelectorAll('.radial-item').forEach(el =>
+        el.classList.toggle('active', el.dataset.action === AppState.currentTool)
+    );
+}
+
+/* ================================================================
+   COLOR PALETTE
+================================================================ */
+let iroPicker = null;
+
+function updateFab() {
+    const f = document.getElementById('main-fab');
+    if (f) f.style.background = AppState.activeColor;
+}
+
+function renderStrip() {
+    const strip  = document.getElementById('pinned-strip');
+    if (!strip) return;
+    const addBtn = document.getElementById('add-pin-trigger');
+    Array.from(strip.children).forEach(c => { if (!c.id) c.remove(); });
+
+    AppState.pinnedColors.forEach(c => {
+        const div = document.createElement('div');
+        div.className = `pin-swatch${c === AppState.activeColor ? ' active-swatch' : ''}`;
+        div.style.backgroundImage = 'conic-gradient(#ccc 25%,#fff 25% 50%,#ccc 50% 75%,#fff 75%)';
+        div.style.backgroundSize  = '8px 8px';
+
+        const inner = document.createElement('div');
+        inner.style.cssText = 'width:100%;height:100%;border-radius:50%;';
+        inner.style.backgroundColor = c;
+        div.appendChild(inner);
+
+        div.addEventListener('click', () => {
+            AppState.activeColor = c;
+            AppState.saveColors();
+            AppState.currentTool = 'pencil';
+            updateFab(); renderStrip(); markActiveTool();
+        });
+
+        let lpt;
+        div.addEventListener('touchstart', () => {
+            lpt = setTimeout(() => {
+                wfConfirm('🎨 Remove Color?', 'Remove this color from the palette?', 'Remove', true)
+                    .then(ok => {
+                        if (ok) {
+                            AppState.pinnedColors = AppState.pinnedColors.filter(x => x !== c);
+                            AppState.saveColors(); renderStrip();
+                        }
+                    });
+            }, 600);
+        }, { passive: true });
+        div.addEventListener('touchend', () => clearTimeout(lpt));
+
+        strip.insertBefore(div, addBtn);
+    });
+}
+
+function openColorPicker() {
+    if (!iroPicker) {
+        iroPicker = new iro.ColorPicker('#iro-container', {
+            width: 240, color: AppState.activeColor, transparency: true,
+            layout: [
+                { component: iro.ui.Wheel },
+                { component: iro.ui.Slider, options: { sliderType: 'value' } },
+                { component: iro.ui.Slider, options: { sliderType: 'alpha' } }
+            ]
+        });
+        document.getElementById('confirm-pin-btn').addEventListener('click', () => {
+            const c = iroPicker.color.rgbaString;
+            AppState.pinnedColors.push(c);
+            AppState.activeColor = c;
+            AppState.saveColors();
+            renderStrip(); updateFab();
+            document.getElementById('picker-overlay').classList.remove('active');
+            AppState.currentTool = 'pencil';
+            markActiveTool();
+        });
+        document.getElementById('picker-overlay').addEventListener('click', e => {
+            if (e.target.id === 'picker-overlay')
+                document.getElementById('picker-overlay').classList.remove('active');
+        });
+    }
+    iroPicker.color.set(AppState.activeColor);
+    document.getElementById('picker-overlay').classList.add('active');
+}
+
+/* ================================================================
+   PROJECT PERSISTENCE
+================================================================ */
+async function saveProject() {
+    if (!AppState.currentProject) return;
+    const name = document.getElementById('project-name').value.trim();
+    AppState.currentProject.name      = name || 'My Project';
+    AppState.currentProject.updatedAt = Date.now();
+    try {
+        await DB.put(AppState.currentProject);
+        showToast('💾 Project saved!');
+    } catch(e) {
+        console.error(e);
+        showToast('❌ Save failed');
+    }
+}
+
+async function loadMostRecent() {
+    const all = await DB.getAll();
+    if (!all.length) return null;
+    return all.sort((a, b) => (b.updatedAt||0) - (a.updatedAt||0))[0];
+}
+
+async function openLoadModal() {
+    const all  = await DB.getAll();
+    const list = document.getElementById('project-list');
+    list.innerHTML = '';
+
+    if (!all.length) {
+        list.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:24px 0;">No saved projects yet</div>';
+    } else {
+        all.sort((a, b) => (b.updatedAt||0) - (a.updatedAt||0)).forEach(proj => {
+            const item = document.createElement('div');
+            item.className = 'project-list-item';
+            item.innerHTML = `
+                <div>
+                  <div class="project-list-name">${escHtml(proj.name)}</div>
+                  <div class="project-list-meta">${proj.weapons.length} weapon${proj.weapons.length !== 1 ? 's' : ''} · ${new Date(proj.updatedAt).toLocaleDateString()}</div>
+                </div>
+                <button class="delete-project-btn" data-pid="${proj.id}">🗑️</button>
+            `;
+            item.addEventListener('click', async e => {
+                if (e.target.closest('.delete-project-btn')) return;
+                AppState.currentProject = proj;
+                document.getElementById('modal-load').classList.remove('active');
+                renderHome();
+                showToast(`📂 Loaded "${proj.name}"`);
+            });
+            item.querySelector('.delete-project-btn').addEventListener('click', async e => {
+                e.stopPropagation();
+                const ok = await wfConfirm('🗑️ Delete Project?', `Delete "${proj.name}"? This cannot be undone.`, 'Delete', true);
+                if (ok) {
+                    await DB.remove(proj.id);
+                    await openLoadModal();
+                    showToast(`🗑️ Deleted`);
+                }
+            });
+            list.appendChild(item);
+        });
+    }
+    document.getElementById('modal-load').classList.add('active');
+}
+
+/* ================================================================
+   .mcaddon EXPORT
+================================================================ */
+async function exportMcaddon() {
+    const p = AppState.currentProject;
+    if (!p || !p.weapons.length) { showToast('❌ No weapons to export'); return; }
+
+    showToast('📦 Building pack…');
+
+    try {
+        const zip      = new JSZip();
+        const rpDir    = zip.folder('resource_pack');
+        const bpDir    = zip.folder('behavior_pack');
+
+        /* Stable UUIDs — stored in project so re-exports are consistent */
+        if (!p.rpUUID) p.rpUUID = genId();
+        if (!p.bpUUID) p.bpUUID = genId();
+        const rpHeaderUUID = p.rpUUID;
+        const rpModUUID    = genId();
+        const bpHeaderUUID = p.bpUUID;
+        const bpModUUID    = genId();
+        const projName     = p.name || 'WeaponForge Project';
+
+        /* ---- Manifests ---- */
+        rpDir.file('manifest.json', JSON.stringify({
+            format_version: 2,
+            header: {
+                name: `${projName} Resources`,
+                description: 'Resource pack created with WeaponForge',
+                uuid: rpHeaderUUID, version: [1,0,0], min_engine_version: [1,20,0]
+            },
+            modules: [{ type: 'resources', uuid: rpModUUID, version: [1,0,0] }]
+        }, null, 2));
+
+        bpDir.file('manifest.json', JSON.stringify({
+            format_version: 2,
+            header: {
+                name: `${projName} Behaviors`,
+                description: 'Behavior pack created with WeaponForge',
+                uuid: bpHeaderUUID, version: [1,0,0], min_engine_version: [1,20,0]
+            },
+            modules: [{ type: 'data', uuid: bpModUUID, version: [1,0,0] }],
+            dependencies: [{ uuid: rpHeaderUUID, version: [1,0,0] }]
+        }, null, 2));
+
+        /* ---- Pack icons (256×256 nearest-neighbor from first weapon) ---- */
+        const iconB64 = pixelsToPng(p.weapons[0].pixelData, 256);
+        rpDir.file('pack_icon.png', iconB64, { base64: true });
+        bpDir.file('pack_icon.png', iconB64, { base64: true });
+
+        /* ---- item_texture.json ---- */
+        const textureData = {};
+        p.weapons.forEach(w => {
+            textureData[w.internalId] = { textures: `textures/items/${w.internalId}` };
+        });
+        rpDir.file('textures/item_texture.json', JSON.stringify({
+            resource_pack_name: `${projName} Resources`,
+            texture_name:  'atlas.items',
+            texture_data: textureData
+        }, null, 2));
+
+        /* ---- Per-weapon files ---- */
+        const texDir = rpDir.folder('textures/items');
+        const itmDir = bpDir.folder('items');
+
+        for (const w of p.weapons) {
+            /* 16×16 PNG texture */
+            texDir.file(`${w.internalId}.png`, pixelsToPng(w.pixelData, 16), { base64: true });
+
+            /* Behavior item JSON */
+            const components = {
+                'minecraft:icon':         w.internalId,
+                'minecraft:display_name': { value: w.displayName },
+                'minecraft:hand_equipped': true,
+                'minecraft:max_stack_size': 1,
+                'minecraft:durability':   { max_durability: w.durability },
+                'minecraft:damage':        w.damage,
+                'minecraft:cooldown':     { category: w.weaponType, duration: w.cooldown },
+                'minecraft:allow_off_hand': w.allowOffHand || false
+            };
+
+            if (w.repairMaterial && REPAIR_MAP[w.repairMaterial]) {
+                components['minecraft:repairable'] = {
+                    repair_items: [{
+                        items: [`minecraft:${REPAIR_MAP[w.repairMaterial]}`],
+                        // Molang: restores item's remaining durability + 5% of its max durability per repair item used
+                        repair_amount: 'context.other->query.remaining_durability + 0.05 * context.other->query.max_durability'
+                    }]
+                };
+            }
+
+            itmDir.file(`${w.internalId}.json`, JSON.stringify({
+                format_version: '1.20.0',
+                'minecraft:item': {
+                    description: {
+                        identifier: `${p.namespace}:${w.internalId}`,
+                        category: 'equipment'
+                    },
+                    components
+                }
+            }, null, 2));
+        }
+
+        /* ---- Generate ZIP & download ---- */
+        const blob     = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+        const filename = `${projName.replace(/[^a-z0-9_\-]/gi, '_')}.mcaddon`;
+        saveAs(blob, filename);
+
+        /* Persist stable UUIDs */
+        await DB.put(AppState.currentProject);
+
+        showExportSuccess(p, filename);
+
+    } catch (err) {
+        console.error('Export error:', err);
+        showToast('❌ Export failed: ' + (err.message || err));
+    }
+}
+
+function showExportSuccess(project, filename) {
+    const body = document.getElementById('export-success-body');
+    const cmds = project.weapons.map(w => {
+        const cmd = `/give @s ${project.namespace}:${w.internalId}`;
+        return `<div class="give-command">
+            <span>${escHtml(cmd)}</span>
+            <button class="copy-btn" onclick="copyText(${JSON.stringify(cmd)})">Copy</button>
+        </div>`;
+    }).join('');
+
+    body.innerHTML = `
+        <div class="ios-instructions">
+            📱 <strong>iOS:</strong> If prompted, tap "Save to Files". Then open the <code>.mcaddon</code>
+            file from the Files app to import it directly into Minecraft.
+        </div>
+        <p style="font-size:12px;color:var(--text-muted);margin-top:4px;">In-game give commands:</p>
+        ${cmds}
+    `;
+    document.getElementById('modal-export-success').classList.add('active');
+}
+
+function copyText(text) {
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(text).then(() => showToast('📋 Copied!')).catch(fallbackCopy.bind(null, text));
+    } else {
+        fallbackCopy(text);
+    }
+}
+function fallbackCopy(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.cssText = 'position:fixed;opacity:0;';
+    document.body.appendChild(ta); ta.focus(); ta.select();
+    try { document.execCommand('copy'); showToast('📋 Copied!'); } catch(_) {}
+    document.body.removeChild(ta);
+}
+
+/* ================================================================
+   HOME SCREEN EVENT BINDINGS
+================================================================ */
+function bindHomeEvents() {
+    document.getElementById('project-name').addEventListener('input', function() {
+        if (AppState.currentProject) AppState.currentProject.name = this.value;
+    });
+
+    document.getElementById('btn-export').addEventListener('click', exportMcaddon);
+
+    document.getElementById('btn-save').addEventListener('click', saveProject);
+
+    document.getElementById('btn-load').addEventListener('click', openLoadModal);
+
+    document.getElementById('btn-new-project').addEventListener('click', async () => {
+        const ok = await wfConfirm('✨ New Project?', 'Start a new project? Make sure you have saved first.', 'New Project', false);
+        if (ok) {
+            AppState.currentProject = makeProject();
+            renderHome();
+            showToast('✨ New project created');
+        }
+    });
+
+    /* Load modal */
+    document.getElementById('close-modal-load').addEventListener('click', () =>
+        document.getElementById('modal-load').classList.remove('active'));
+    document.getElementById('close-load-btn').addEventListener('click', () =>
+        document.getElementById('modal-load').classList.remove('active'));
+    document.getElementById('modal-load').addEventListener('click', e => {
+        if (e.target === e.currentTarget) e.currentTarget.classList.remove('active');
+    });
+
+    /* Export success modal */
+    document.getElementById('close-modal-export').addEventListener('click', () =>
+        document.getElementById('modal-export-success').classList.remove('active'));
+    document.getElementById('close-export-btn').addEventListener('click', () =>
+        document.getElementById('modal-export-success').classList.remove('active'));
+    document.getElementById('modal-export-success').addEventListener('click', e => {
+        if (e.target === e.currentTarget) e.currentTarget.classList.remove('active');
+    });
+
+    /* Delete confirm */
+    document.getElementById('delete-cancel-btn').addEventListener('click', hideDeleteConfirm);
+    document.getElementById('delete-confirm-btn').addEventListener('click', () => {
+        if (_pendingDeleteId && AppState.currentProject) {
+            AppState.currentProject.weapons =
+                AppState.currentProject.weapons.filter(w => w.id !== _pendingDeleteId);
+            hideDeleteConfirm();
+            renderHome();
+            saveProject().catch(() => {});
+            showToast('🗑️ Weapon deleted');
+        }
+    });
+    document.getElementById('delete-confirm-overlay').addEventListener('click', e => {
+        if (e.target === e.currentTarget) hideDeleteConfirm();
+    });
+
+    /* Prevent iOS rubber-banding globally on non-scrollable areas */
+    document.addEventListener('contextmenu', e => e.preventDefault());
+    document.body.addEventListener('touchmove', e => {
+        const allowed = e.target.closest('.stats-panel, .weapon-grid, .modal-body, .home-actions, #picker-card, .bottom-drawer');
+        if (!allowed && e.target.tagName === 'CANVAS') e.preventDefault();
+    }, { passive: false });
+}
+
+/* ================================================================
+   INIT
+================================================================ */
+async function init() {
+    await DB.open();
+    let project = await loadMostRecent();
+    if (!project) project = makeProject();
+    AppState.currentProject = project;
+    bindHomeEvents();
+    renderHome();
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
