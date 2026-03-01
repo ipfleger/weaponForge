@@ -926,6 +926,52 @@
 
         <div class="stat-group">
             <div class="toggle-row">
+                <span class="toggle-label">✨ Enchanted Glow</span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="stat-enchanted">
+                    <span class="toggle-track"></span>
+                </label>
+            </div>
+        </div>
+
+        <div class="stat-group">
+            <label class="stat-label">🪄 Shoots Magic</label>
+            <select id="stat-projectile" class="stat-input">
+                <option value="">None (Melee Only)</option>
+                <option value="fireball">Fireball</option>
+                <option value="snowball">Snowball</option>
+                <option value="arrow">Arrow</option>
+                <option value="wither_skull">Wither Skull</option>
+                <option value="llama_spit">Llama Spit</option>
+            </select>
+        </div>
+
+        <div class="stat-group">
+            <div class="toggle-row">
+                <span class="toggle-label">🍎 Is Edible</span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="stat-edible">
+                    <span class="toggle-track"></span>
+                </label>
+            </div>
+            <div class="slider-row" style="margin-top: 6px;">
+                <span class="stat-label" style="width: 80px;">Nutrition:</span>
+                <input type="range" id="stat-nutrition" min="1" max="20" step="1" value="4">
+                <span class="slider-value" id="stat-nutrition-val">4</span>
+            </div>
+        </div>
+
+        <div class="stat-group">
+            <label class="stat-label">⛏️ Mining Speed Multiplier</label>
+            <div class="slider-row">
+                <input type="range" id="stat-mining-speed" min="1" max="50" step="1" value="1">
+                <span class="slider-value" id="stat-mining-speed-val">1x</span>
+            </div>
+            <div class="info-text">1x is normal. 50x is instant-break for most blocks!</div>
+        </div>
+
+        <div class="stat-group">
+            <div class="toggle-row">
                 <span class="toggle-label"><i class="ph ph-hand"></i> Can Use Off-hand</span>
                 <label class="toggle-switch">
                     <input type="checkbox" id="stat-offhand">
@@ -1210,7 +1256,17 @@ function makeWeapon(type = 'sword') {
         internalId: 'new_weapon', weaponType: type,
         damage: d.damage, cooldown: d.cooldown,
         durability: d.durability, repairMaterial: d.repairMaterial,
-        allowOffHand: false, pixelData: emptyPixels(),
+        allowOffHand: false,
+
+        // --- NEW DATA FIELDS ---
+        isEnchanted: false,
+        projectile: '',
+        isEdible: false,
+        nutrition: 4,
+        miningSpeed: 1,
+        // -----------------------
+
+        pixelData: emptyPixels(),
         createdAt: Date.now(), updatedAt: Date.now()
     };
 }
@@ -1660,6 +1716,13 @@ function openEditor(weaponId) {
     document.getElementById('stat-durability-val').textContent = weapon.durability;
     document.getElementById('stat-repair').value       = weapon.repairMaterial || '';
     document.getElementById('stat-offhand').checked    = weapon.allowOffHand || false;
+    document.getElementById('stat-enchanted').checked  = weapon.isEnchanted || false;
+    document.getElementById('stat-projectile').value   = weapon.projectile || '';
+    document.getElementById('stat-edible').checked     = weapon.isEdible || false;
+    document.getElementById('stat-nutrition').value    = weapon.nutrition || 4;
+    document.getElementById('stat-nutrition-val').textContent = weapon.nutrition || 4;
+    document.getElementById('stat-mining-speed').value = weapon.miningSpeed || 1;
+    document.getElementById('stat-mining-speed-val').textContent = (weapon.miningSpeed || 1) + 'x';
     document.getElementById('editor-weapon-title').textContent = weapon.displayName;
 
     navigateTo('screen-editor', 'screen-home');
@@ -1685,6 +1748,11 @@ function saveCurrentWeapon(quiet = false) {
     weapon.durability      = parseInt(document.getElementById('stat-durability').value, 10);
     weapon.repairMaterial  = document.getElementById('stat-repair').value;
     weapon.allowOffHand    = document.getElementById('stat-offhand').checked;
+    weapon.isEnchanted     = document.getElementById('stat-enchanted').checked;
+    weapon.projectile      = document.getElementById('stat-projectile').value;
+    weapon.isEdible        = document.getElementById('stat-edible').checked;
+    weapon.nutrition       = parseInt(document.getElementById('stat-nutrition').value, 10);
+    weapon.miningSpeed     = parseInt(document.getElementById('stat-mining-speed').value, 10);
     weapon.pixelData       = cm ? cm.extractPixels() : weapon.pixelData;
     weapon.updatedAt       = Date.now();
     p.updatedAt            = Date.now();
@@ -1727,6 +1795,12 @@ function bindEditorEvents() {
     });
     document.getElementById('stat-durability').addEventListener('input', function() {
         document.getElementById('stat-durability-val').textContent = this.value;
+    });
+    document.getElementById('stat-nutrition').addEventListener('input', function() {
+        document.getElementById('stat-nutrition-val').textContent = this.value;
+    });
+    document.getElementById('stat-mining-speed').addEventListener('input', function() {
+        document.getElementById('stat-mining-speed-val').textContent = this.value + 'x';
     });
 
     /* --- Undo/Redo --- */
@@ -2143,6 +2217,42 @@ async function exportMcaddon() {
                 'minecraft:cooldown':     { category: w.weaponType, duration: w.cooldown },
                 'minecraft:allow_off_hand': w.allowOffHand || false
             };
+
+            // 1. Enchanted Glow
+            if (w.isEnchanted) {
+                components['minecraft:foil'] = true;
+            }
+
+            // 2. Magic Projectiles
+            if (w.projectile && w.projectile !== '') {
+                components['minecraft:projectile'] = {
+                    "projectile_entity": `minecraft:${w.projectile}`
+                };
+                components['minecraft:throwable'] = {
+                    "do_swing_animation": true
+                };
+            }
+
+            // 3. Edible
+            if (w.isEdible) {
+                components['minecraft:food'] = {
+                    "nutrition": w.nutrition,
+                    "can_always_eat": true
+                };
+            }
+
+            // 4. Super Miner
+            if (w.miningSpeed > 1) {
+                components['minecraft:digger'] = {
+                    "use_efficiency": true,
+                    "destroy_speeds": [
+                        {
+                            "block": { "tags": "q.any_tag('stone', 'metal', 'dirt', 'wood', 'sand', 'gravel')" },
+                            "speed": w.miningSpeed
+                        }
+                    ]
+                };
+            }
 
             if (w.repairMaterial && REPAIR_MAP[w.repairMaterial]) {
                 components['minecraft:repairable'] = {
