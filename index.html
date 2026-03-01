@@ -573,7 +573,7 @@
 ================================================================ -->
 <div id="screen-home" class="screen screen-active">
     <div class="home-header">
-        <span class="home-title">⚔️ WeaponForge</span>
+        <span class="home-title"><i class="ph ph-sword"></i> WeaponForge</span>
         <input type="text" id="project-name" class="project-name-input" placeholder="My Project" autocomplete="off" spellcheck="false">
     </div>
 
@@ -582,10 +582,10 @@
     </div>
 
     <div class="home-actions">
-        <button class="action-btn primary" id="btn-export" disabled>📦 Export .mcaddon</button>
-        <button class="action-btn" id="btn-save">💾 Save Project</button>
-        <button class="action-btn" id="btn-load">📂 Load Project</button>
-        <button class="action-btn" id="btn-new-project">🗑️ New Project</button>
+        <button class="action-btn primary" id="btn-export" disabled><i class="ph ph-package"></i> Export .mcaddon</button>
+        <button class="action-btn" id="btn-save"><i class="ph ph-floppy-disk"></i> Save Project</button>
+        <button class="action-btn" id="btn-load"><i class="ph ph-folder-open"></i> Load Project</button>
+        <button class="action-btn" id="btn-new-project"><i class="ph ph-plus-circle"></i> New Project</button>
     </div>
 </div>
 
@@ -596,7 +596,7 @@
     <div class="editor-topbar">
         <button class="topbar-btn" id="btn-back">← Back</button>
         <span class="editor-topbar-title" id="editor-weapon-title">Weapon</span>
-        <button class="topbar-btn primary" id="btn-save-weapon">💾 Save</button>
+        <button class="topbar-btn primary" id="btn-save-weapon"><i class="ph ph-floppy-disk"></i> Save</button>
     </div>
 
     <!-- Canvas area -->
@@ -632,7 +632,7 @@
         <!-- Onion skin drawer -->
         <div class="bottom-drawer" id="onion-drawer">
             <div class="drawer-header">
-                <span>👻 Trace Vanilla Item</span>
+                <span><i class="ph ph-ghost"></i> Trace Vanilla Item</span>
                 <button class="close-btn" id="close-onion"><i class="ph ph-x"></i></button>
             </div>
             <div>
@@ -640,19 +640,19 @@
                 <input type="range" id="onion-opacity" min="0.1" max="1" step="0.1" value="0.5">
             </div>
             <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:4px;">
-                <button class="btn-primary" data-onion="sword">🗡️ Sword</button>
-                <button class="btn-primary" data-onion="pickaxe">⛏️ Pickaxe</button>
-                <button class="btn-primary" data-onion="axe">🪓 Axe</button>
-                <button class="btn-primary" data-onion="shovel">🔨 Shovel</button>
-                <button class="btn-primary" data-onion="hoe">🌿 Hoe</button>
-                <button class="btn-primary" style="background:#555" data-onion="clear">✕ Clear</button>
+                <button class="btn-primary" data-onion="sword"><i class="ph ph-sword"></i> Sword</button>
+                <button class="btn-primary" data-onion="pickaxe"><i class="ph ph-pickaxe"></i> Pickaxe</button>
+                <button class="btn-primary" data-onion="axe"><i class="ph ph-axe"></i> Axe</button>
+                <button class="btn-primary" data-onion="shovel"><i class="ph ph-shovel"></i> Shovel</button>
+                <button class="btn-primary" data-onion="hoe"><i class="ph ph-plant"></i> Hoe</button>
+                <button class="btn-primary" style="background:#555" data-onion="clear"><i class="ph ph-x"></i> Clear</button>
             </div>
         </div>
 
         <!-- Background color drawer -->
         <div class="bottom-drawer" id="bg-drawer">
             <div class="drawer-header">
-                <span>🖥 Visibility Background</span>
+                <span><i class="ph ph-monitor"></i> Visibility Background</span>
                 <button class="close-btn" id="close-bg"><i class="ph ph-x"></i></button>
             </div>
             <span class="slider-label">Does not affect exported texture.</span>
@@ -670,28 +670,28 @@
     <!-- Stats panel -->
     <div class="stats-panel" id="stats-panel">
         <div class="stat-group">
-            <label class="stat-label">✏️ Display Name</label>
+            <label class="stat-label"><i class="ph ph-pencil"></i> Display Name</label>
             <input type="text" id="stat-display-name" class="stat-input" placeholder="Fire Sword" autocomplete="off">
         </div>
 
         <div class="stat-group">
-            <label class="stat-label">🔖 Internal ID (auto-generated)</label>
+            <label class="stat-label"><i class="ph ph-tag"></i> Internal ID (auto-generated)</label>
             <input type="text" id="stat-internal-id" class="stat-input" readonly tabindex="-1">
         </div>
 
         <div class="stat-group">
-            <label class="stat-label">⚔️ Weapon Type</label>
+            <label class="stat-label"><i class="ph ph-sword"></i> Weapon Type</label>
             <select id="stat-weapon-type" class="stat-input">
-                <option value="sword">🗡️ Sword</option>
-                <option value="pickaxe">⛏️ Pickaxe</option>
-                <option value="axe">🪓 Axe</option>
-                <option value="shovel">🔨 Shovel</option>
-                <option value="hoe">🌿 Hoe</option>
+                <option value="sword">Sword</option>
+                <option value="pickaxe">Pickaxe</option>
+                <option value="axe">Axe</option>
+                <option value="shovel">Shovel</option>
+                <option value="hoe">Hoe</option>
             </select>
         </div>
 
         <div class="stat-group">
-            <label class="stat-label">💥 How hard it hits</label>
+            <label class="stat-label"><i class="ph ph-lightning"></i> How hard it hits</label>
             <div class="slider-row">
                 <input type="range" id="stat-damage" min="1" max="30" step="1" value="7">
                 <span class="slider-value" id="stat-damage-val">7</span>
@@ -699,7 +699,7 @@
         </div>
 
         <div class="stat-group">
-            <label class="stat-label">⚡ How fast it swings (cooldown in seconds)</label>
+            <label class="stat-label"><i class="ph ph-timer"></i> How fast it swings (cooldown in seconds)</label>
             <div class="slider-row">
                 <input type="range" id="stat-cooldown" min="0.1" max="4.0" step="0.1" value="0.4">
                 <span class="slider-value" id="stat-cooldown-val">0.4s</span>
@@ -707,7 +707,7 @@
         </div>
 
         <div class="stat-group">
-            <label class="stat-label">🛡️ How long it lasts (durability)</label>
+            <label class="stat-label"><i class="ph ph-shield"></i> How long it lasts (durability)</label>
             <div class="slider-row">
                 <input type="range" id="stat-durability" min="1" max="5000" step="1" value="500">
                 <span class="slider-value" id="stat-durability-val">500</span>
@@ -715,12 +715,12 @@
         </div>
 
         <div class="stat-group">
-            <label class="stat-label">📦 Max Stack Size</label>
+            <label class="stat-label"><i class="ph ph-stack"></i> Max Stack Size</label>
             <div class="info-text">Always 1 — weapons can't be stacked in Minecraft.</div>
         </div>
 
         <div class="stat-group">
-            <label class="stat-label">🔧 Repair Material</label>
+            <label class="stat-label"><i class="ph ph-wrench"></i> Repair Material</label>
             <select id="stat-repair" class="stat-input">
                 <option value="">None</option>
                 <option value="Iron Ingot">Iron Ingot</option>
@@ -734,7 +734,7 @@
 
         <div class="stat-group">
             <div class="toggle-row">
-                <span class="toggle-label">🤚 Can Use Off-hand</span>
+                <span class="toggle-label"><i class="ph ph-hand"></i> Can Use Off-hand</span>
                 <label class="toggle-switch">
                     <input type="checkbox" id="stat-offhand">
                     <span class="toggle-track"></span>
@@ -762,7 +762,7 @@
 <div class="modal-overlay" id="modal-load">
     <div class="modal-sheet">
         <div class="modal-header">
-            <span class="modal-title">📂 Load Project</span>
+            <span class="modal-title"><i class="ph ph-folder-open"></i> Load Project</span>
             <button class="close-btn" id="close-modal-load"><i class="ph ph-x"></i></button>
         </div>
         <div class="modal-body" id="project-list"></div>
@@ -776,7 +776,7 @@
 <div class="modal-overlay" id="modal-export-success">
     <div class="modal-sheet">
         <div class="modal-header">
-            <span class="modal-title">✅ Pack Exported!</span>
+            <span class="modal-title"><i class="ph ph-check-circle"></i> Pack Exported!</span>
             <button class="close-btn" id="close-modal-export"><i class="ph ph-x"></i></button>
         </div>
         <div class="modal-body" id="export-success-body"></div>
@@ -789,7 +789,7 @@
 ================================================================ -->
 <div class="delete-confirm-overlay" id="delete-confirm-overlay">
     <div class="delete-confirm-card">
-        <div class="delete-confirm-title">🗑️ Delete Weapon?</div>
+        <div class="delete-confirm-title"><i class="ph ph-trash"></i> Delete Weapon?</div>
         <div class="delete-confirm-msg" id="delete-confirm-msg">This cannot be undone.</div>
         <div class="delete-confirm-actions">
             <button class="btn-cancel" id="delete-cancel-btn">Cancel</button>
@@ -895,7 +895,7 @@ document.addEventListener('DOMContentLoaded', () => {
 /* ================================================================
    CONSTANTS
 ================================================================ */
-const WEAPON_TYPE_ICONS = { sword:'🗡️', pickaxe:'⛏️', axe:'🪓', shovel:'🔨', hoe:'🌿' };
+const WEAPON_TYPE_ICONS = { sword:'<i class="ph ph-sword"></i>', pickaxe:'<i class="ph ph-pickaxe"></i>', axe:'<i class="ph ph-axe"></i>', shovel:'<i class="ph ph-shovel"></i>', hoe:'<i class="ph ph-plant"></i>' };
 
 const WEAPON_DEFAULTS = {
     sword:   { damage:7,  cooldown:0.4, durability:500, repairMaterial:'Iron Ingot' },
@@ -1272,10 +1272,10 @@ function renderHome() {
         preview.width  = 64; preview.height = 64;
         drawPreview(weapon.pixelData, preview);
 
-        const icon = WEAPON_TYPE_ICONS[weapon.weaponType] || '⚔️';
+        const icon = WEAPON_TYPE_ICONS[weapon.weaponType] || '<i class="ph ph-sword"></i>';
 
         card.innerHTML = `
-            <div class="damage-badge">💥 ${weapon.damage}</div>
+            <div class="damage-badge"><i class="ph ph-lightning"></i> ${weapon.damage}</div>
         `;
         card.insertAdjacentElement('afterbegin', preview);
 
@@ -1426,7 +1426,7 @@ function saveCurrentWeapon(quiet = false) {
     p.updatedAt            = Date.now();
 
     document.getElementById('editor-weapon-title').textContent = displayName;
-    if (!quiet) showToast('💾 Weapon saved!');
+    if (!quiet) showToast('Weapon saved!');
 }
 
 /* ================================================================
@@ -1637,7 +1637,7 @@ function handleTool(action) {
     } else if (action === 'background') {
         document.getElementById('bg-drawer').classList.add('visible');
     } else if (action === 'clear') {
-        wfConfirm('🗑️ Clear Canvas?', 'This will erase all pixels. Cannot be undone.', 'Clear', true)
+        wfConfirm('Clear Canvas?', 'This will erase all pixels. Cannot be undone.', 'Clear', true)
             .then(ok => { if (ok && cm) cm.clearGrid(); });
     } else {
         AppState.currentTool = action;
@@ -1689,7 +1689,7 @@ function renderStrip() {
         let lpt;
         div.addEventListener('touchstart', () => {
             lpt = setTimeout(() => {
-                wfConfirm('🎨 Remove Color?', 'Remove this color from the palette?', 'Remove', true)
+                wfConfirm('Remove Color?', 'Remove this color from the palette?', 'Remove', true)
                     .then(ok => {
                         if (ok) {
                             AppState.pinnedColors = AppState.pinnedColors.filter(x => x !== c);
@@ -1743,10 +1743,10 @@ async function saveProject() {
     AppState.currentProject.updatedAt = Date.now();
     try {
         await DB.put(AppState.currentProject);
-        showToast('💾 Project saved!');
+        showToast('Project saved!');
     } catch(e) {
         console.error(e);
-        showToast('❌ Save failed');
+        showToast('Save failed');
     }
 }
 
@@ -1772,22 +1772,22 @@ async function openLoadModal() {
                   <div class="project-list-name">${escHtml(proj.name)}</div>
                   <div class="project-list-meta">${proj.weapons.length} weapon${proj.weapons.length !== 1 ? 's' : ''} · ${new Date(proj.updatedAt).toLocaleDateString()}</div>
                 </div>
-                <button class="delete-project-btn" data-pid="${proj.id}">🗑️</button>
+                <button class="delete-project-btn" data-pid="${proj.id}"><i class="ph ph-trash"></i></button>
             `;
             item.addEventListener('click', async e => {
                 if (e.target.closest('.delete-project-btn')) return;
                 AppState.currentProject = proj;
                 document.getElementById('modal-load').classList.remove('active');
                 renderHome();
-                showToast(`📂 Loaded "${proj.name}"`);
+                showToast(`Loaded "${proj.name}"`);
             });
             item.querySelector('.delete-project-btn').addEventListener('click', async e => {
                 e.stopPropagation();
-                const ok = await wfConfirm('🗑️ Delete Project?', `Delete "${proj.name}"? This cannot be undone.`, 'Delete', true);
+                const ok = await wfConfirm('Delete Project?', `Delete "${proj.name}"? This cannot be undone.`, 'Delete', true);
                 if (ok) {
                     await DB.remove(proj.id);
                     await openLoadModal();
-                    showToast(`🗑️ Deleted`);
+                    showToast('Deleted');
                 }
             });
             list.appendChild(item);
@@ -1801,9 +1801,9 @@ async function openLoadModal() {
 ================================================================ */
 async function exportMcaddon() {
     const p = AppState.currentProject;
-    if (!p || !p.weapons.length) { showToast('❌ No weapons to export'); return; }
+    if (!p || !p.weapons.length) { showToast('No weapons to export'); return; }
 
-    showToast('📦 Building pack…');
+    showToast('Building pack…');
 
     try {
         const zip      = new JSZip();
@@ -1911,7 +1911,7 @@ async function exportMcaddon() {
 
     } catch (err) {
         console.error('Export error:', err);
-        showToast('❌ Export failed: ' + (err.message || err));
+        showToast('Export failed: ' + (err.message || err));
     }
 }
 
@@ -1927,7 +1927,7 @@ function showExportSuccess(project, filename) {
 
     body.innerHTML = `
         <div class="ios-instructions">
-            📱 <strong>iOS:</strong> If prompted, tap "Save to Files". Then open the <code>.mcaddon</code>
+            <i class="ph ph-device-mobile"></i> <strong>iOS:</strong> If prompted, tap "Save to Files". Then open the <code>.mcaddon</code>
             file from the Files app to import it directly into Minecraft.
         </div>
         <p style="font-size:12px;color:var(--text-muted);margin-top:4px;">In-game give commands:</p>
@@ -1938,7 +1938,7 @@ function showExportSuccess(project, filename) {
 
 function copyText(text) {
     if (navigator.clipboard) {
-        navigator.clipboard.writeText(text).then(() => showToast('📋 Copied!')).catch(fallbackCopy.bind(null, text));
+        navigator.clipboard.writeText(text).then(() => showToast('Copied!')).catch(fallbackCopy.bind(null, text));
     } else {
         fallbackCopy(text);
     }
@@ -1947,7 +1947,7 @@ function fallbackCopy(text) {
     const ta = document.createElement('textarea');
     ta.value = text; ta.style.cssText = 'position:fixed;opacity:0;';
     document.body.appendChild(ta); ta.focus(); ta.select();
-    try { document.execCommand('copy'); showToast('📋 Copied!'); } catch(_) {}
+    try { document.execCommand('copy'); showToast('Copied!'); } catch(_) {}
     document.body.removeChild(ta);
 }
 
@@ -1966,11 +1966,11 @@ function bindHomeEvents() {
     document.getElementById('btn-load').addEventListener('click', openLoadModal);
 
     document.getElementById('btn-new-project').addEventListener('click', async () => {
-        const ok = await wfConfirm('✨ New Project?', 'Start a new project? Make sure you have saved first.', 'New Project', false);
+        const ok = await wfConfirm('New Project?', 'Start a new project? Make sure you have saved first.', 'New Project', false);
         if (ok) {
             AppState.currentProject = makeProject();
             renderHome();
-            showToast('✨ New project created');
+            showToast('New project created');
         }
     });
 
@@ -2001,7 +2001,7 @@ function bindHomeEvents() {
             hideDeleteConfirm();
             renderHome();
             saveProject().catch(() => {});
-            showToast('🗑️ Weapon deleted');
+            showToast('Weapon deleted');
         }
     });
     document.getElementById('delete-confirm-overlay').addEventListener('click', e => {
