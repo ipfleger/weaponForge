@@ -190,6 +190,10 @@
             touch-action: pan-y;
         }
 
+        .define-recipe-btn {
+            width: 100%; font-size: 16px; padding: 14px;
+        }
+
         .stat-group { display: flex; flex-direction: column; gap: 6px; }
         .stat-label { font-size: 12px; color: var(--text-muted); font-weight: 500; }
 
@@ -638,6 +642,12 @@
             width: 42px; height: 42px;
             image-rendering: pixelated; pointer-events: none;
         }
+        #screen-recipe .recipe-output-slot.rb-locked {
+            cursor: default; border-color: var(--primary-light);
+            opacity: 0.9;
+        }
+        #screen-recipe .recipe-output-slot.rb-locked:active { background: var(--bg); border-color: var(--primary-light); }
+
         #screen-recipe .recipe-slot-tooltip {
             display: none; position: absolute; bottom: 110%; left: 50%;
             transform: translateX(-50%);
@@ -762,7 +772,6 @@
 
     <div class="home-actions">
         <button class="action-btn primary" id="btn-export" disabled><i class="ph ph-package"></i> Export .mcaddon</button>
-        <button class="action-btn" id="btn-recipe-builder"><i class="ph ph-cooking-pot"></i> Recipe Builder</button>
         <button class="action-btn" id="btn-save"><i class="ph ph-floppy-disk"></i> Save Project</button>
         <button class="action-btn" id="btn-load"><i class="ph ph-folder-open"></i> Load Project</button>
         <button class="action-btn" id="btn-new-project"><i class="ph ph-plus-circle"></i> New Project</button>
@@ -921,6 +930,10 @@
                 </label>
             </div>
         </div>
+
+        <div style="height:16px;flex-shrink:0;"></div>
+
+        <button class="action-btn primary define-recipe-btn" id="btn-define-recipe"><i class="ph ph-cooking-pot"></i> ⚒️ Define Recipe</button>
 
         <div style="height:16px;flex-shrink:0;"></div>
     </div><!-- end .stats-panel -->
@@ -1310,7 +1323,7 @@ class CanvasManager {
     _centerGrid() {
         if (!this.canvas) return;
         const gridPx = 16 * 20;
-        const scale  = Math.min(this.canvas.width, this.canvas.height) / (gridPx * 1.4);
+        const scale  = Math.min(this.canvas.width, this.canvas.height) / (gridPx * 1.1);
         this.canvas.setViewportTransform([
             scale, 0, 0, scale,
             (this.canvas.width  - gridPx * scale) / 2,
@@ -1758,6 +1771,9 @@ function bindEditorEvents() {
         saveCurrentWeapon();
         saveProject();
     });
+
+    /* --- Define Recipe --- */
+    document.getElementById('btn-define-recipe').addEventListener('click', openRecipeBuilder);
 
     /* --- Prevent iOS bounce on canvas --- */
     document.getElementById('canvas-area').addEventListener('touchmove', e => {
@@ -2241,8 +2257,6 @@ function bindHomeEvents() {
 
     document.getElementById('btn-export').addEventListener('click', exportMcaddon);
 
-    document.getElementById('btn-recipe-builder').addEventListener('click', openRecipeBuilder);
-
     document.getElementById('btn-save').addEventListener('click', saveProject);
 
     document.getElementById('btn-load').addEventListener('click', openLoadModal);
@@ -2616,6 +2630,7 @@ function rbInitCraftingGrid() {
     const out = document.getElementById('recipe-output-slot');
     out.innerHTML = '';
     out.onclick = () => {
+        if (out.classList.contains('rb-locked')) return;
         if (rbSelectedItem) {
             rbOutputSlot = { ...rbSelectedItem };
             rbRenderOutputSlot();
@@ -2627,11 +2642,13 @@ function rbInitCraftingGrid() {
     };
     out.addEventListener('contextmenu', e => {
         e.preventDefault();
+        if (out.classList.contains('rb-locked')) return;
         if (rbOutputSlot) { rbOutputSlot = null; rbRenderOutputSlot(); }
     });
     let lpOut;
     out.addEventListener('touchstart', () => {
         lpOut = setTimeout(() => {
+            if (out.classList.contains('rb-locked')) return;
             if (rbOutputSlot) { rbOutputSlot = null; rbRenderOutputSlot(); }
         }, 600);
     }, { passive: true });
@@ -2664,8 +2681,9 @@ function rbSaveRecipe() {
     if (!p) return;
     if (!p.recipes) p.recipes = [];
 
-    if (rbCraftGrid.every(s => !s)) {
-        showToast('Place at least one item in the crafting grid');
+    const filledSlots = rbCraftGrid.filter(s => s).length;
+    if (filledSlots < 2) {
+        showToast('Recipe needs at least 2 ingredients');
         return;
     }
     if (!rbOutputSlot) {
@@ -2675,6 +2693,7 @@ function rbSaveRecipe() {
 
     const recipe = {
         id: genId(),
+        weaponId: AppState.editingWeaponId || null,
         grid: rbCraftGrid.slice(),
         outputSlot: { ...rbOutputSlot },
         savedAt: Date.now()
@@ -2695,16 +2714,48 @@ function rbSaveRecipe() {
 
 /* ---- navigation ---- */
 function openRecipeBuilder() {
-    navigateTo('screen-recipe', 'screen-home');
+    navigateTo('screen-recipe', 'screen-editor');
     rbInitCraftingGrid();
+
+    /* Auto-set output slot to the current weapon being edited */
+    const p = AppState.currentProject;
+    const weaponId = AppState.editingWeaponId;
+    const weapon = p && weaponId ? p.weapons.find(w => w.id === weaponId) : null;
+    if (weapon) {
+        const iconUrl = 'data:image/png;base64,' + pixelsToPng(weapon.pixelData, 32);
+        rbOutputSlot = { id: weapon.internalId, name: weapon.displayName, iconUrl, isCustomWeapon: true };
+        rbRenderOutputSlot();
+
+        /* Lock the output slot */
+        const outEl = document.getElementById('recipe-output-slot');
+        outEl.classList.add('rb-locked');
+
+        /* Pre-populate crafting grid if a recipe already exists for this weapon */
+        if (p.recipes) {
+            const existing = p.recipes.find(
+                r => r.outputSlot && r.outputSlot.id === weapon.internalId && r.outputSlot.isCustomWeapon
+            );
+            if (existing && existing.grid) {
+                existing.grid.forEach((item, i) => {
+                    rbCraftGrid[i] = item ? { ...item } : null;
+                });
+                /* Re-render each slot with its stored item */
+                const slots = document.getElementById('recipe-crafting-grid').querySelectorAll('.recipe-craft-slot');
+                slots.forEach((slot, i) => rbRenderSlot(slot, rbCraftGrid[i]));
+            }
+        }
+    }
+
     /* Lazily load vanilla items; always refresh custom weapons */
     rbLoadAllItems();
 }
 
 function closeRecipeBuilder() {
     rbDropItem();
+    /* Remove output slot lock */
+    document.getElementById('recipe-output-slot').classList.remove('rb-locked');
     document.getElementById('screen-recipe').classList.remove('screen-active');
-    document.getElementById('screen-home').classList.add('screen-active');
+    document.getElementById('screen-editor').classList.add('screen-active');
 }
 
 /* ---- desktop cursor move ---- */
