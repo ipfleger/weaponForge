@@ -1602,7 +1602,13 @@ function navigateTo(screenId, fromScreenId) {
     document.getElementById(screenId).classList.add('screen-active');
 
     if (screenId === 'screen-editor') {
-        setTimeout(() => {
+        const editorEl = document.getElementById('screen-editor');
+        let done = false;
+        let fallback;
+        const initEditor = () => {
+            if (done) return;
+            done = true;
+            clearTimeout(fallback);
             if (!cm) {
                 cm = new CanvasManager();
                 cm.init();
@@ -1610,7 +1616,12 @@ function navigateTo(screenId, fromScreenId) {
             } else {
                 cm.resize();
             }
-        }, 60);
+        };
+        editorEl.addEventListener('transitionend', function onTransitionEnd() {
+            editorEl.removeEventListener('transitionend', onTransitionEnd);
+            initEditor();
+        });
+        fallback = setTimeout(initEditor, 350);
     }
 }
 
@@ -2328,6 +2339,14 @@ function bindHomeEvents() {
     document.getElementById('recipe-deselect-btn').addEventListener('click', rbDropItem);
     document.getElementById('recipe-search').addEventListener('input', e => {
         rbFilterAndRender(e.target.value.toLowerCase().trim());
+    });
+
+    let _resizeTimer;
+    window.addEventListener('resize', () => {
+        clearTimeout(_resizeTimer);
+        _resizeTimer = setTimeout(() => {
+            if (cm && cm._ready) cm.resize();
+        }, 150);
     });
 }
 
