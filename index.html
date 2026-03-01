@@ -681,13 +681,16 @@
 
         <div class="stat-group">
             <label class="stat-label"><i class="ph ph-sword"></i> Weapon Type</label>
-            <select id="stat-weapon-type" class="stat-input">
-                <option value="sword">Sword</option>
-                <option value="pickaxe">Pickaxe</option>
-                <option value="axe">Axe</option>
-                <option value="shovel">Shovel</option>
-                <option value="hoe">Hoe</option>
-            </select>
+                <select id="stat-weapon-type" class="stat-input">
+                    <option value="sword">Sword</option>
+                    <option value="pickaxe">Pickaxe</option>
+                    <option value="axe">Axe</option>
+                    <option value="shovel">Shovel</option>
+                    <option value="hoe">Hoe</option>
+                    <option value="trident">Trident</option>
+                    <option value="spear">Spear</option>
+                    <option value="mace">Mace</option>
+                </select>
         </div>
 
         <div class="stat-group">
@@ -895,14 +898,17 @@ document.addEventListener('DOMContentLoaded', () => {
 /* ================================================================
    CONSTANTS
 ================================================================ */
-const WEAPON_TYPE_ICONS = { sword:'<i class="ph ph-sword"></i>', pickaxe:'<i class="ph ph-pickaxe"></i>', axe:'<i class="ph ph-axe"></i>', shovel:'<i class="ph ph-shovel"></i>', hoe:'<i class="ph ph-plant"></i>' };
+const WEAPON_TYPE_ICONS = { sword:'<i class="ph ph-sword"></i>', pickaxe:'<i class="ph ph-pickaxe"></i>', axe:'<i class="ph ph-axe"></i>', shovel:'<i class="ph ph-shovel"></i>', hoe:'<i class="ph ph-plant"></i>', trident:'<i class="ph ph-triangle"></i>', spear:'<i class="ph ph-arrow-up-right"></i>', mace:'<i class="ph ph-asterisk"></i>' };
 
 const WEAPON_DEFAULTS = {
-    sword:   { damage:7,  cooldown:0.4, durability:500, repairMaterial:'Iron Ingot' },
-    pickaxe: { damage:5,  cooldown:0.8, durability:500, repairMaterial:'Iron Ingot' },
-    axe:     { damage:9,  cooldown:1.2, durability:500, repairMaterial:'Iron Ingot' },
-    shovel:  { damage:4,  cooldown:0.6, durability:500, repairMaterial:'Iron Ingot' },
-    hoe:     { damage:2,  cooldown:0.4, durability:500, repairMaterial:'Iron Ingot' },
+    sword:   { damage:7,  cooldown:0.4, durability:500,  repairMaterial:'Iron Ingot' },
+    pickaxe: { damage:5,  cooldown:0.8, durability:500,  repairMaterial:'Iron Ingot' },
+    axe:     { damage:9,  cooldown:1.2, durability:500,  repairMaterial:'Iron Ingot' },
+    shovel:  { damage:4,  cooldown:0.6, durability:500,  repairMaterial:'Iron Ingot' },
+    hoe:     { damage:2,  cooldown:0.4, durability:500,  repairMaterial:'Iron Ingot' },
+    trident: { damage:9,  cooldown:1.1, durability:250,  repairMaterial:'' },
+    spear:   { damage:6,  cooldown:0.8, durability:400,  repairMaterial:'Iron Ingot' },
+    mace:    { damage:10, cooldown:1.6, durability:500,  repairMaterial:'Diamond' },
 };
 
 const REPAIR_MAP = {
