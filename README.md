@@ -13,7 +13,8 @@ Built as a fun project with no build tools — just open `index.html` in a brows
 - **Onion Skin Tracing** — Load vanilla Minecraft tool textures as semi-transparent guides
 - **Weapon Stats Panel** — Set display name, weapon type, damage, attack speed, durability, repair material, and off-hand toggle
 - **Project Management** — Create, save, and load multiple projects (persisted in IndexedDB)
-- **`.mcaddon` Export** — Generates a valid Bedrock add-on ZIP with resource pack, behavior pack, manifests, textures, and item JSONs
+- **⚒️ Recipe Builder** — Design crafting recipes for your custom weapons using a 3×3 crafting grid; search/browse 300+ vanilla Minecraft items and place your custom weapons in the grid; recipes are saved with the project and exported as Bedrock recipe JSON
+- **`.mcaddon` Export** — Generates a valid Bedrock add-on ZIP with resource pack, behavior pack, manifests, textures, item JSONs, and crafting recipe JSONs
 - **Post-Export Guide** — Shows iOS import instructions and `/give` commands for each weapon
 - **Mobile-First** — Designed for iPhone SE through iPhone 15 Pro Max; works when added to the home screen
 
@@ -45,6 +46,15 @@ Built as a fun project with no build tools — just open `index.html` in a brows
    *(or save to Files app first, then open it)*
 4. Minecraft will import both the resource pack and behavior pack automatically
 
+### Design a Crafting Recipe
+1. Tap **⚒️ Recipe Builder** on the home screen
+2. Browse or search the item grid (300+ vanilla Minecraft items + your custom weapons)
+3. Tap an item to select it, then tap a slot in the 3×3 crafting grid to place it
+4. Tap the **Result** slot to set the crafting output (place your custom weapon here)
+5. Tap **💾 Save** — the recipe is stored with your project
+6. Long-press a filled slot (or right-click on desktop) to remove an item from it
+7. Export your `.mcaddon` to include the recipe as a Bedrock `behavior_pack/recipes/*.json` file
+
 ### Use Your Weapons In-Game
 After importing, enable both the resource pack and behavior pack in your Minecraft world settings. Then use the `/give` command shown in the export modal, e.g.:
 
@@ -70,8 +80,10 @@ YourProject.mcaddon
 └── behavior_pack/
     ├── manifest.json          — Pack metadata with RP dependency
     ├── pack_icon.png
-    └── items/
-        └── *.json             — Item component definitions
+    ├── items/
+    │   └── *.json             — Item component definitions
+    └── recipes/
+        └── *.json             — Crafting recipe definitions (if any recipes saved)
 ```
 
 Each item JSON uses the [Minecraft Bedrock 1.20 item format](https://learn.microsoft.com/en-us/minecraft/creator/reference/content/itemreference/) and includes components like `minecraft:damage`, `minecraft:durability`, `minecraft:cooldown`, and optionally `minecraft:repairable`.
