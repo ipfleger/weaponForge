@@ -272,14 +272,14 @@
         .palette-fab i { color: white; font-size: 24px; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.6)); }
 
         .pinned-strip {
-            display: flex; gap: 8px; padding: 6px;
+            display: flex; flex-wrap: wrap; gap: 8px; padding: 6px;
             background: rgba(28,28,28,0.92); backdrop-filter: blur(12px);
-            border-radius: 28px; border: 1px solid var(--border);
+            border-radius: 16px; border: 1px solid var(--border);
             max-width: 0; opacity: 0; overflow: hidden;
             pointer-events: none;
             transition: max-width 0.3s ease, opacity 0.3s ease, padding 0.3s ease;
         }
-        .pinned-strip.visible { max-width: 100vw; opacity: 1; padding-right: 10px; pointer-events: auto; }
+        .pinned-strip.visible { max-width: calc(100vw - 90px); opacity: 1; padding-right: 10px; pointer-events: auto; }
 
         .pin-swatch {
             width: 34px; height: 34px; border-radius: 50%;
