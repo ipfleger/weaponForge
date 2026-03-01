@@ -1289,9 +1289,11 @@ class CanvasManager {
             stopContextMenu: true
         });
 
+        
         this._buildGrid();
         this._bindEvents();
         this.saveState();
+        this.resize()
         this._ready = true;
     }
 
