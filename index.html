@@ -2291,7 +2291,10 @@ function bindHomeEvents() {
     });
 
     /* Prevent iOS rubber-banding globally on non-scrollable areas */
-    document.addEventListener('contextmenu', e => e.preventDefault());
+    document.addEventListener('contextmenu', e => {
+        e.preventDefault();
+        if (rbSelectedItem) rbDropItem();
+    });
     document.body.addEventListener('touchmove', e => {
         const allowed = e.target.closest('.stats-panel, .weapon-grid, .modal-body, .home-actions, #picker-card, .bottom-drawer, #recipe-item-grid-wrapper, .recipe-body');
         if (!allowed && e.target.tagName === 'CANVAS') e.preventDefault();
@@ -2659,28 +2662,35 @@ function rbClearGrid() {
 function rbSaveRecipe() {
     const p = AppState.currentProject;
     if (!p) return;
-    if (!rbOutputSlot && rbCraftGrid.every(s => !s)) {
-        showToast('Nothing to save — place items first');
+    if (!p.recipes) p.recipes = [];
+
+    if (rbCraftGrid.every(s => !s)) {
+        showToast('Place at least one item in the crafting grid');
         return;
     }
-    if (!p.recipes) p.recipes = [];
+    if (!rbOutputSlot) {
+        showToast('Place an item in the Result slot to define what is crafted');
+        return;
+    }
 
     const recipe = {
         id: genId(),
         grid: rbCraftGrid.slice(),
-        outputSlot: rbOutputSlot ? { ...rbOutputSlot } : null,
+        outputSlot: { ...rbOutputSlot },
         savedAt: Date.now()
     };
 
     /* Replace existing recipe with same output, or append */
-    const idx = rbOutputSlot
-        ? p.recipes.findIndex(r => r.outputSlot && r.outputSlot.id === rbOutputSlot.id && r.outputSlot.isCustomWeapon === rbOutputSlot.isCustomWeapon)
-        : -1;
-    if (idx >= 0) p.recipes[idx] = recipe;
-    else          p.recipes.push(recipe);
+    const idx = p.recipes.findIndex(
+        r => r.outputSlot && r.outputSlot.id === rbOutputSlot.id &&
+             r.outputSlot.isCustomWeapon === rbOutputSlot.isCustomWeapon
+    );
+    const overwriting = idx >= 0;
+    if (overwriting) p.recipes[idx] = recipe;
+    else             p.recipes.push(recipe);
 
     p.updatedAt = Date.now();
-    showToast('Recipe saved!');
+    showToast(overwriting ? 'Recipe updated!' : 'Recipe saved!');
 }
 
 /* ---- navigation ---- */
@@ -2704,11 +2714,6 @@ document.addEventListener('mousemove', e => {
         cursorEl.style.left = (e.clientX + 12) + 'px';
         cursorEl.style.top  = (e.clientY + 12) + 'px';
     }
-});
-
-/* ---- right-click to deselect on desktop ---- */
-document.addEventListener('contextmenu', e => {
-    if (rbSelectedItem) { e.preventDefault(); rbDropItem(); }
 });
 
 /* ================================================================
