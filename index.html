@@ -839,6 +839,7 @@
         <div class="top-right-controls">
             <button class="icon-btn" id="undo-btn" disabled><i class="ph ph-arrow-u-up-left"></i></button>
             <button class="icon-btn" id="redo-btn" disabled><i class="ph ph-arrow-u-up-right"></i></button>
+            <button class="icon-btn" id="onion-front-btn" title="Toggle Onion Skin Visibility"><i class="ph ph-eye"></i></button>
         </div>
 
         <!-- Radial tool menu -->
@@ -1732,7 +1733,13 @@ class CanvasManager {
                 imageSmoothing: false
             });
             this.canvas.add(img);
-            img.sendToBack();
+                        // Respect the front toggle state when loading a new image
+            if (typeof onionFrontActive !== 'undefined' && onionFrontActive) {
+                img.bringToFront();
+                img.set({ opacity: 1 });
+            } else {
+                img.sendToBack();
+            }
             this.onionSkin = img;
             this.canvas.requestRenderAll();
         }, { crossOrigin: 'anonymous' }); // crossOrigin prevents CORS-tainted canvas when loading external GitHub textures
@@ -2018,6 +2025,38 @@ function bindEditorEvents() {
     });
 
     /* --- Drawers --- */
+        // Track the toggle state
+    let onionFrontActive = false;
+
+    // New button click logic
+    document.getElementById('onion-front-btn').addEventListener('click', function() {
+        onionFrontActive = !onionFrontActive;
+        
+        // Highlight the button when active
+        this.style.color = onionFrontActive ? 'var(--primary-light)' : '';
+        
+        if (cm && cm.onionSkin) {
+            if (onionFrontActive) {
+                cm.onionSkin.bringToFront();
+                cm.onionSkin.set('opacity', 1);
+            } else {
+                cm.onionSkin.sendToBack();
+                cm.onionSkin.set('opacity', parseFloat(document.getElementById('onion-opacity').value) || 0.5);
+            }
+            cm.canvas.requestRenderAll();
+        }
+    });
+
+    // Modified opacity slider logic
+    document.getElementById('onion-opacity').addEventListener('input', function() {
+        if (cm && cm.onionSkin) {
+            // Only apply opacity changes if the front toggle isn't active
+            if (!onionFrontActive) {
+                cm.onionSkin.set('opacity', parseFloat(this.value));
+                cm.canvas.requestRenderAll();
+            }
+        }
+    });
     document.getElementById('close-onion').addEventListener('click', () =>
         document.getElementById('onion-drawer').classList.remove('visible'));
     document.getElementById('close-bg').addEventListener('click', () =>
