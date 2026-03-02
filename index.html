@@ -1495,20 +1495,105 @@ class CanvasManager {
     ]);
 }
 
-    _bindEvents() {
+        _bindEvents() {
         this.canvas.on('mouse:down', o => {
             if (!o.target) return;
+            // Prevent drawing a dot if this is a multi-touch (e.g. pinch)
+            if (o.e && o.e.touches && o.e.touches.length > 1) return;
             this.isPainting = true;
             this.stateChangedThisStroke = false;
             this._paint(o.target);
         });
         this.canvas.on('mouse:over', o => {
+            if (o.e && o.e.touches && o.e.touches.length > 1) return;
             if (this.isPainting && o.target) this._paint(o.target);
         });
         this.canvas.on('mouse:up', () => {
             this.isPainting = false;
             if (this.stateChangedThisStroke) this.saveState();
         });
+
+        // 1. Desktop zoom via mouse wheel
+        this.canvas.on('mouse:wheel', (opt) => {
+            opt.e.preventDefault();
+            opt.e.stopPropagation();
+            let delta = opt.e.deltaY;
+            let zoom = this.canvas.getZoom();
+            zoom *= 0.999 ** delta;
+            if (zoom > 20) zoom = 20;
+            if (zoom < 0.1) zoom = 0.1;
+            this.canvas.zoomToPoint({ x: opt.e.offsetX, y: opt.e.offsetY }, zoom);
+        });
+
+        // 2. Mobile pinch-to-zoom and pan
+        const upperCanvas = this.canvas.upperCanvasEl;
+        let initialDistance = null;
+        let initialZoom = 1;
+        let lastPanPoint = null;
+
+        upperCanvas.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 2) {
+                e.preventDefault(); // Stop default browser zoom/scroll
+                this.isPainting = false; 
+                
+                const x1 = e.touches[0].clientX;
+                const y1 = e.touches[0].clientY;
+                const x2 = e.touches[1].clientX;
+                const y2 = e.touches[1].clientY;
+
+                initialDistance = Math.hypot(x1 - x2, y1 - y2);
+                initialZoom = this.canvas.getZoom();
+                lastPanPoint = { x: (x1 + x2) / 2, y: (y1 + y2) / 2 };
+            }
+        }, { passive: false });
+
+        upperCanvas.addEventListener('touchmove', (e) => {
+            if (e.touches.length === 2 && initialDistance !== null && lastPanPoint !== null) {
+                e.preventDefault();
+                this.isPainting = false;
+                
+                const x1 = e.touches[0].clientX;
+                const y1 = e.touches[0].clientY;
+                const x2 = e.touches[1].clientX;
+                const y2 = e.touches[1].clientY;
+                
+                const currentDistance = Math.hypot(x1 - x2, y1 - y2);
+                const currentCenter = { x: (x1 + x2) / 2, y: (y1 + y2) / 2 };
+
+                // Handle panning (translation)
+                const vpt = this.canvas.viewportTransform;
+                const dx = currentCenter.x - lastPanPoint.x;
+                const dy = currentCenter.y - lastPanPoint.y;
+                vpt[4] += dx;
+                vpt[5] += dy;
+                this.canvas.requestRenderAll();
+
+                // Handle zooming
+                const scale = currentDistance / initialDistance;
+                let newZoom = initialZoom * scale;
+                
+                // Clamp zoom limits
+                if (newZoom < 0.1) newZoom = 0.1;
+                if (newZoom > 20) newZoom = 20;
+                
+                // Zoom directly into the center point of the pinch
+                const rect = upperCanvas.getBoundingClientRect();
+                const centerPoint = new fabric.Point(
+                    currentCenter.x - rect.left,
+                    currentCenter.y - rect.top
+                );
+                
+                this.canvas.zoomToPoint(centerPoint, newZoom);
+                lastPanPoint = currentCenter;
+            }
+        }, { passive: false });
+
+        upperCanvas.addEventListener('touchend', (e) => {
+            if (e.touches.length < 2) {
+                initialDistance = null;
+                lastPanPoint = null;
+            }
+        }, { passive: false });
     }
 
     /* ---- history ---- */
@@ -1984,12 +2069,24 @@ function bindEditorEvents() {
     /* --- Define Recipe --- */
     document.getElementById('btn-define-recipe').addEventListener('click', openRecipeBuilder);
 
-    /* --- Prevent iOS bounce / pinch-to-zoom on canvas area --- */
-    document.getElementById('canvas-area').addEventListener('touchmove', e => {
+        /* --- Prevent iOS bounce / pinch-to-zoom and Double-Tap Zoom on canvas area --- */
+    const canvasArea = document.getElementById('canvas-area');
+    let lastCanvasTouchEnd = 0;
+    
+    // Prevent double-tap zoom natively without breaking rapid single-tap drawing
+    canvasArea.addEventListener('touchend', e => {
+        const now = Date.now();
+        if (now - lastCanvasTouchEnd <= 300) {
+            e.preventDefault(); 
+        }
+        lastCanvasTouchEnd = now;
+    }, { passive: false });
+
+    canvasArea.addEventListener('touchmove', e => {
         e.preventDefault();
     }, { passive: false });
-    document.getElementById('canvas-area').addEventListener('gesturestart', e => e.preventDefault());
-    document.getElementById('canvas-area').addEventListener('gesturechange', e => e.preventDefault());
+    canvasArea.addEventListener('gesturestart', e => e.preventDefault());
+    canvasArea.addEventListener('gesturechange', e => e.preventDefault());
 
     /* --- Radial menu --- */
     buildRadialMenu();
