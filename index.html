@@ -1,24 +1,3236 @@
-<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Weapon Forge</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#121212">
+    <title>WeaponForge</title>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@jaames/iro@5"></script>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
     <style>
+        /* ======================================================
+           RESET & VARIABLES
+        ====================================================== */
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        button, a, .weapon-card, .pin-swatch, .bg-swatch, .palette-fab, .add-pin-btn, .radial-item, .icon-btn {
+            button, a, .weapon-card, .pin-swatch, .bg-swatch, .palette-fab, .add-pin-btn, .radial-item, .icon-btn {
+                touch-action: manipulation;
+            }
+
+        :root {
+            --bg: #121212;
+            --surface: #2c2c2c;
+            --surface2: #242424;
+            --primary: #3b8526;
+            --primary-light: #4caf50;
+            --text: #e5e5e5;
+            --text-muted: #888;
+            --grid-line: rgba(255, 255, 255, 0.08);
+            --border: rgba(255,255,255,0.08);
+            --danger: #e53935;
+        }
+
+        html, body {
+            height: 100%; overflow: hidden;
+            background: var(--bg); color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            user-select: none; -webkit-user-select: none;
+            touch-action: none;
+        }
+
+        /* ======================================================
+           SCREENS
+        ====================================================== */
+        .screen {
+            position: fixed; top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: var(--bg);
+            display: flex; flex-direction: column;
+            transform: translateX(100%);
+            transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+            will-change: transform; overflow: hidden;
+        }
+        .screen.screen-active { transform: translateX(0); }
+
+        /* ======================================================
+           SCREEN 1: HOME
+        ====================================================== */
+        .home-header {
+            flex-shrink: 0;
+            padding: 16px 16px 12px;
+            display: flex; align-items: center; gap: 10px;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface2);
+        }
+        .home-title { font-size: 22px; font-weight: 700; white-space: nowrap; }
+
+        .project-name-input {
+            flex: 1; min-width: 0;
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 10px; padding: 9px 12px;
+            color: var(--text); font-size: 15px; outline: none;
             touch-action: manipulation;
+        }
+        .project-name-input:focus { border-color: var(--primary); }
+
+        .weapon-grid {
+            flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
+            padding: 14px;
+            display: grid; grid-template-columns: repeat(2, 1fr);
+            gap: 12px; align-content: start;
+            touch-action: pan-y;
+        }
+
+        .weapon-card {
+            background: var(--surface); border-radius: 14px;
+            border: 2px solid var(--border);
+            padding: 12px; display: flex; flex-direction: column;
+            align-items: center; gap: 8px; cursor: pointer;
+            transition: border-color 0.2s, transform 0.1s, box-shadow 0.2s;
+            position: relative; min-height: 148px;
+        }
+        .weapon-card:hover { border-color: rgba(76,175,80,0.35); box-shadow: 0 4px 18px rgba(76,175,80,0.1); }
+        .weapon-card:active { transform: scale(0.97); border-color: var(--primary); box-shadow: none; }
+
+        .weapon-preview-canvas {
+            image-rendering: pixelated;
+            image-rendering: -moz-crisp-edges;
+            border-radius: 6px;
+            background: repeating-conic-gradient(#333 0% 25%, #222 0% 50%) 0 0 / 8px 8px;
+            width: 64px; height: 64px; flex-shrink: 0;
+        }
+
+        .weapon-card-name {
+            font-weight: 600; font-size: 13px;
+            text-align: center; word-break: break-word;
+            line-height: 1.3; width: 100%;
+        }
+        .weapon-card-meta {
+            display: flex; align-items: center; gap: 6px;
+            font-size: 12px; color: var(--text-muted);
+        }
+        .damage-badge {
+            background: rgba(229,57,53,0.2); color: #ff8080;
+            padding: 2px 7px; border-radius: 10px;
+            font-size: 11px; font-weight: 600;
+        }
+
+        .add-weapon-card {
+            border-style: dashed; border-color: #444;
+            justify-content: center; min-height: 148px;
+        }
+        .add-weapon-card:active { border-color: var(--primary); }
+        .add-icon { font-size: 38px; color: #555; line-height: 1; }
+        .add-weapon-card .weapon-card-name { color: var(--text-muted); font-weight: 400; }
+
+        .home-actions {
+            flex-shrink: 0;
+            display: flex; gap: 8px; overflow-x: auto;
+            padding: 10px 14px;
+            padding-bottom: max(10px, env(safe-area-inset-bottom));
+            border-top: 1px solid var(--border); background: var(--surface2);
+            touch-action: pan-x;
+        }
+        .home-actions::-webkit-scrollbar { display: none; }
+
+        .action-btn {
+            flex-shrink: 0;
+            background: var(--surface); border: 1px solid var(--border);
+            color: var(--text); padding: 10px 14px; border-radius: 10px;
+            font-size: 13px; font-weight: 500; cursor: pointer;
+            white-space: nowrap; min-height: 44px;
+            transition: background 0.15s;
+        }
+        .action-btn:active { background: #3a3a3a; }
+        .action-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+        .action-btn.primary { background: var(--primary); border-color: var(--primary); box-shadow: 0 2px 10px rgba(59,133,38,0.35); }
+        .action-btn.primary:hover { filter: brightness(1.12); }
+
+        /* ======================================================
+           SCREEN 2: EDITOR
+        ====================================================== */
+        .editor-topbar {
+            flex-shrink: 0;
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 12px; height: 56px;
+            border-bottom: 1px solid var(--border); background: var(--surface2);
+        }
+        .editor-topbar-title {
+            font-size: 14px; font-weight: 600; color: var(--text-muted);
+            max-width: 140px; overflow: hidden;
+            text-overflow: ellipsis; white-space: nowrap;
+        }
+        .topbar-btn {
+            background: none; border: 1px solid var(--border); color: var(--text);
+            padding: 8px 14px; border-radius: 8px;
+            font-size: 14px; cursor: pointer; min-height: 36px; white-space: nowrap;
+        }
+        .topbar-btn.primary { background: var(--primary); border-color: var(--primary); box-shadow: 0 2px 8px rgba(59,133,38,0.35); }
+        .topbar-btn:hover { background: #3a3a3a; }
+        .topbar-btn.primary:hover { filter: brightness(1.1); background: var(--primary); }
+        .topbar-btn:active { opacity: 0.7; }
+
+#canvas-area {
+    flex: 3;              /* take 3x more space than the stats panel */
+    flex-shrink: 0;
+    position: relative !important;
+    overflow: hidden;
+    min-height: 50vh;     /* guarantee at least half the screen */
+    background: var(--bg);
+}
+
+        #canvas-wrapper {
+            width: 100%; height: 100%;
+            display: flex; align-items: center; justify-content: center;
+            overflow: hidden;
+        }
+
+        .editor-divider {
+            flex-shrink: 0; height: 1px; background: var(--border);
+        }
+
+        .stats-panel {
+            flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
+            padding: 16px; display: flex; flex-direction: column; gap: 14px;
+            touch-action: pan-y;
+        }
+
+        .define-recipe-btn {
+            width: 100%; font-size: 16px; padding: 14px;
+        }
+
+        .stat-group { display: flex; flex-direction: column; gap: 6px; }
+        .stat-label { font-size: 12px; color: var(--text-muted); font-weight: 500; }
+
+        .stat-input {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 10px; padding: 11px 14px;
+            color: var(--text); font-size: 15px; outline: none; width: 100%;
+            touch-action: manipulation;
+        }
+        .stat-input:focus { border-color: var(--primary); }
+        .stat-input[readonly] { opacity: 0.55; cursor: default; }
+
+        select.stat-input {
+            -webkit-appearance: none; appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23888' d='M6 8L0 0h12z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat; background-position: right 14px center;
+            padding-right: 38px; cursor: pointer;
+        }
+
+        .slider-row { display: flex; align-items: center; gap: 10px; }
+        .slider-row input[type=range] {
+            flex: 1; -webkit-appearance: none;
+            background: transparent; touch-action: pan-x;
+        }
+        .slider-row input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none; height: 22px; width: 22px;
+            border-radius: 50%; background: var(--primary-light);
+            cursor: pointer; margin-top: -8px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+            border: 2px solid white;
+            transition: transform 0.15s;
+        }
+        .slider-row input[type=range]:active::-webkit-slider-thumb { transform: scale(1.15); }
+        .slider-row input[type=range]::-webkit-slider-runnable-track {
+            height: 6px; background: #333; border-radius: 3px; cursor: pointer;
+        }
+        .slider-row input[type=range]::-moz-range-thumb {
+            height: 22px; width: 22px; border-radius: 50%;
+            background: var(--primary-light); cursor: pointer;
+            border: 2px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+        }
+        .slider-row input[type=range]::-moz-range-track {
+            height: 6px; background: #333; border-radius: 3px; cursor: pointer;
+        }
+        .slider-value {
+            min-width: 44px; text-align: right;
+            font-size: 14px; font-weight: 600; color: var(--primary-light);
+        }
+
+        .toggle-row {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 12px 14px; background: var(--surface);
+            border-radius: 10px; border: 1px solid var(--border);
+        }
+        .toggle-label { font-size: 14px; }
+        .toggle-switch { position: relative; width: 50px; height: 28px; flex-shrink: 0; }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+        .toggle-track {
+            position: absolute; inset: 0; background: #444;
+            border-radius: 14px; cursor: pointer; transition: background 0.2s;
+        }
+        .toggle-track::after {
+            content: ''; position: absolute;
+            left: 4px; top: 4px; width: 20px; height: 20px;
+            border-radius: 50%; background: white; transition: transform 0.2s;
+        }
+        .toggle-switch input:checked + .toggle-track { background: var(--primary); }
+        .toggle-switch input:checked + .toggle-track::after { transform: translateX(22px); }
+
+        .info-text {
+            font-size: 13px; color: var(--text-muted);
+            padding: 10px 14px; background: var(--surface);
+            border-radius: 10px; border: 1px solid var(--border);
+        }
+
+        /* ======================================================
+           FLOATING CANVAS UI
+        ====================================================== */
+        .pinned-container {
+            position: absolute; top: 14px; left: 14px;
+            display: flex; align-items: flex-start; gap: 10px; z-index: 150;
+        }
+
+        .palette-fab {
+            width: 50px; height: 50px; border-radius: 50%;
+            background: #ccc; border: 3px solid #333;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; overflow: hidden; flex-shrink: 0;
+        }
+        .palette-fab i { color: white; font-size: 24px; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.6)); }
+
+        .pinned-strip {
+            display: flex; flex-wrap: wrap; gap: 8px; padding: 6px;
+            background: rgba(28,28,28,0.92); backdrop-filter: blur(12px);
+            border-radius: 16px; border: 1px solid var(--border);
+            max-width: 0; opacity: 0; overflow: hidden;
+            pointer-events: none;
+            transition: max-width 0.3s ease, opacity 0.3s ease, padding 0.3s ease;
+        }
+        .pinned-strip.visible { max-width: calc(100vw - 90px); opacity: 1; padding-right: 10px; pointer-events: auto; }
+
+        .pin-swatch {
+            width: 34px; height: 34px; border-radius: 50%;
+            border: 2px solid #555; flex-shrink: 0; cursor: pointer; position: relative;
+        }
+        .pin-swatch.active-swatch { border-color: white; transform: scale(1.2); box-shadow: 0 0 0 2px rgba(255,255,255,0.4), 0 0 10px rgba(76,175,80,0.5); }
+
+        .add-pin-btn {
+            width: 34px; height: 34px; border-radius: 50%;
+            background: #333; border: 1.5px dashed #666;
+            display: flex; align-items: center; justify-content: center;
+            color: #aaa; cursor: pointer; flex-shrink: 0;
+        }
+
+        .top-right-controls {
+            position: absolute; top: 14px; right: 14px;
+            display: flex; gap: 8px; z-index: 50;
+        }
+        .icon-btn {
+            width: 44px; height: 44px; border-radius: 50%;
+            background: #2a2a2a; border: 1px solid var(--border);
+            color: var(--text); display: flex; align-items: center;
+            justify-content: center; font-size: 18px; cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            transition: background 0.15s, opacity 0.15s, box-shadow 0.15s;
+        }
+        .icon-btn:hover { background: #3a3a3a; box-shadow: 0 4px 16px rgba(0,0,0,0.55); }
+        .icon-btn:active { background: #444; }
+        .icon-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+        /* Radial menu */
+        .bottom-left-menu {
+            position: absolute; bottom: 18px; left: 14px;
+            z-index: 50; width: 56px; height: 56px;
+        }
+        .main-fab-btn {
+            width: 56px; height: 56px;
+            background: var(--text); color: #1a1a1a;
+            border-radius: 50%; border: none;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+            font-size: 26px; display: flex; align-items: center;
+            justify-content: center; cursor: pointer;
+            position: relative; z-index: 52;
+            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .main-fab-btn.open { transform: rotate(45deg); background: #ff5555; color: white; }
+
+        .radial-wheel-wrapper {
+            position: absolute; bottom: 28px; left: 28px;
+            width: 0; height: 0; pointer-events: none;
+            z-index: 51; opacity: 0;
+            transition: opacity 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .menu-open .radial-wheel-wrapper { opacity: 1; pointer-events: auto; }
+
+        .radial-wheel {
+            position: absolute; top: 0; left: 0;
+            width: 240px; height: 240px;
+            transform: translate(-50%, -50%) scale(0.5);
+            border-radius: 50%;
+            transition: transform 0.3s ease;
+            touch-action: none;
+        }
+        .menu-open .radial-wheel { transform: translate(-50%, -50%) scale(1); }
+
+        .radial-item {
+            position: absolute; width: 46px; height: 46px;
+            background: #333; color: var(--text);
+            border-radius: 50%; border: 1px solid var(--border);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.35);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 20px; cursor: pointer;
+            top: 50%; left: 50%; margin-top: -23px; margin-left: -23px;
+            transition: background 0.15s;
+        }
+        .radial-item.active { background: var(--primary); border-color: var(--primary-light); color: white; }
+        .radial-item:active { filter: brightness(1.2); }
+
+        /* ======================================================
+           DRAWERS (anchored inside canvas-area)
+        ====================================================== */
+        .bottom-drawer {
+            position: absolute; bottom: 0; left: 0; right: 0;
+            background: #1e1e1e; border-top-left-radius: 20px; border-top-right-radius: 20px;
+            box-shadow: 0 -4px 24px rgba(0,0,0,0.7);
+            padding: 22px; z-index: 100;
+            transform: translateY(100%);
+            transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+            display: flex; flex-direction: column; gap: 14px;
+            border-top: 1px solid var(--border);
+        }
+        .bottom-drawer.visible { transform: translateY(0); }
+
+        .drawer-header {
+            display: flex; justify-content: space-between;
+            align-items: center; font-weight: 600; font-size: 16px;
+        }
+        .close-btn {
+            background: none; border: none; font-size: 20px;
+            cursor: pointer; color: #aaa; padding: 5px; line-height: 1;
+        }
+        .close-btn:hover { color: white; }
+
+        .drawer-input {
+            width: 100%; border: 1px solid #444; border-radius: 10px;
+            padding: 12px; background: #1a1a1a; color: white;
+            font-family: monospace; font-size: 14px;
+            touch-action: manipulation;
+        }
+        .btn-primary {
+            background: var(--surface); color: white;
+            border: 1px solid var(--border); padding: 12px 18px;
+            border-radius: 10px; font-weight: 500; width: 100%;
+            cursor: pointer; font-size: 15px; transition: background 0.15s;
+        }
+        .btn-primary.accent { background: var(--primary); border: none; }
+        .btn-primary:active { filter: brightness(0.88); }
+
+        .slider-label { font-size: 12px; color: #888; margin-bottom: 4px; display: block; }
+        input[type=range] {
+            -webkit-appearance: none; width: 100%; background: transparent; margin-top: 8px;
+            touch-action: pan-x;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none; height: 18px; width: 18px;
+            border-radius: 50%; background: var(--primary-light); cursor: pointer; margin-top: -6px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+            border: 2px solid white;
+            transition: transform 0.15s;
+        }
+        input[type=range]:active::-webkit-slider-thumb { transform: scale(1.2); }
+        input[type=range]::-webkit-slider-runnable-track {
+            height: 6px; cursor: pointer; background: #333; border-radius: 3px;
+        }
+        input[type=range]::-moz-range-thumb {
+            height: 18px; width: 18px; border-radius: 50%;
+            background: var(--primary-light); cursor: pointer;
+            border: 2px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+        }
+        input[type=range]::-moz-range-track {
+            height: 6px; background: #333; border-radius: 3px; cursor: pointer;
+        }
+
+        .bg-swatch-container { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+        .bg-swatch {
+            height: 42px; border-radius: 8px;
+            border: 2px solid var(--border); cursor: pointer;
+        }
+
+        /* ======================================================
+           COLOR PICKER OVERLAY
+        ====================================================== */
+        .picker-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.75); backdrop-filter: blur(5px);
+            z-index: 300; display: flex; align-items: center; justify-content: center;
+            opacity: 0; pointer-events: none; transition: opacity 0.2s;
+        }
+        .picker-overlay.active { opacity: 1; pointer-events: auto; }
+        .picker-card {
+            background: #242424; padding: 24px; border-radius: 20px;
+            box-shadow: 0 20px 30px rgba(0,0,0,0.6);
+            display: flex; flex-direction: column; align-items: center; gap: 20px;
+            border: 1px solid var(--border);
+        }
+
+        /* ======================================================
+           MODALS
+        ====================================================== */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.78); backdrop-filter: blur(6px);
+            z-index: 400; display: flex; align-items: flex-end; justify-content: center;
+            opacity: 0; pointer-events: none; transition: opacity 0.2s;
+        }
+        .modal-overlay.active { opacity: 1; pointer-events: auto; }
+
+        .modal-sheet {
+            background: var(--surface2); border-top-left-radius: 24px; border-top-right-radius: 24px;
+            padding: 24px; padding-bottom: max(24px, env(safe-area-inset-bottom));
+            width: 100%; max-height: 80vh;
+            display: flex; flex-direction: column; gap: 16px;
+            border-top: 1px solid var(--border);
+            box-shadow: 0 -8px 40px rgba(0,0,0,0.6);
+            transform: translateY(40px);
+            transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+        .modal-overlay.active .modal-sheet { transform: translateY(0); }
+
+        .modal-header { display: flex; justify-content: space-between; align-items: center; }
+        .modal-title { font-size: 18px; font-weight: 700; }
+
+        .modal-body {
+            overflow-y: auto; -webkit-overflow-scrolling: touch;
+            flex: 1; display: flex; flex-direction: column; gap: 10px;
+            touch-action: pan-y;
+        }
+
+        .project-list-item {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 14px; background: var(--surface);
+            border-radius: 12px; border: 1px solid var(--border); cursor: pointer;
+        }
+        .project-list-item:active { opacity: 0.75; }
+        .project-list-name { font-weight: 600; font-size: 15px; }
+        .project-list-meta { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
+
+        .delete-project-btn {
+            background: rgba(229,57,53,0.12); border: none;
+            color: #ff7070; padding: 8px 12px; border-radius: 8px;
+            font-size: 18px; cursor: pointer; flex-shrink: 0;
+        }
+
+        .modal-btn {
+            background: var(--surface); border: 1px solid var(--border);
+            color: var(--text); padding: 14px; border-radius: 12px;
+            font-size: 15px; font-weight: 500; cursor: pointer; width: 100%;
+            flex-shrink: 0;
+        }
+        .modal-btn.primary { background: var(--primary); border-color: var(--primary); }
+        .modal-btn:active { opacity: 0.75; }
+
+        /* Export success */
+        .ios-instructions {
+            background: rgba(59,133,38,0.15); border: 1px solid rgba(59,133,38,0.35);
+            border-radius: 10px; padding: 12px;
+            font-size: 13px; color: #a0d49a; line-height: 1.55;
+        }
+        .give-command {
+            background: #161616; border-radius: 8px;
+            padding: 10px 12px; font-family: monospace;
+            font-size: 13px; color: #7ec8e3;
+            display: flex; justify-content: space-between;
+            align-items: center; gap: 8px; word-break: break-all;
+        }
+        .copy-btn {
+            flex-shrink: 0; background: var(--surface);
+            border: 1px solid var(--border); color: var(--text);
+            padding: 6px 10px; border-radius: 6px; font-size: 12px; cursor: pointer;
+        }
+        .copy-btn:active { background: #444; }
+
+        /* ======================================================
+           DELETE CONFIRM OVERLAY
+        ====================================================== */
+        .delete-confirm-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.65); z-index: 450;
+            display: flex; align-items: center; justify-content: center;
+            opacity: 0; pointer-events: none; transition: opacity 0.2s;
+        }
+        .delete-confirm-overlay.active { opacity: 1; pointer-events: auto; }
+        .delete-confirm-card {
+            background: var(--surface2); border-radius: 20px;
+            padding: 28px 22px; margin: 24px; width: 100%; max-width: 320px;
+            display: flex; flex-direction: column; gap: 18px;
+            text-align: center; border: 1px solid var(--border);
+        }
+        .delete-confirm-title { font-size: 18px; font-weight: 700; }
+        .delete-confirm-msg { color: var(--text-muted); font-size: 14px; line-height: 1.5; }
+        .delete-confirm-actions { display: flex; gap: 10px; }
+        .btn-danger {
+            flex: 1; background: var(--danger); border: none; color: white;
+            padding: 14px; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer;
+        }
+        .btn-cancel {
+            flex: 1; background: var(--surface);
+            border: 1px solid var(--border); color: var(--text);
+            padding: 14px; border-radius: 12px; font-size: 15px; cursor: pointer;
+        }
+
+        /* ======================================================
+           TOAST
+        ====================================================== */
+        .toast {
+            position: fixed; bottom: 110px; left: 50%;
+            transform: translateX(-50%);
+            background: rgba(18,18,18,0.95); backdrop-filter: blur(8px);
+            color: white; padding: 10px 20px; border-radius: 20px;
+            font-size: 14px; pointer-events: none; z-index: 600;
+            white-space: nowrap; border: 1px solid rgba(255,255,255,0.1);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+            animation: toastAnim 2s forwards;
+        }
+        @keyframes toastAnim {
+            0%   { opacity: 0; transform: translateX(-50%) translateY(6px); }
+            15%  { opacity: 1; transform: translateX(-50%) translateY(0); }
+            75%  { opacity: 1; }
+            100% { opacity: 0; }
+        }
+
+        /* ======================================================
+           SCROLLBAR
+        ====================================================== */
+        ::-webkit-scrollbar { width: 3px; height: 3px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #3a3a3a; border-radius: 2px; }
+
+        /* ======================================================
+           SCREEN 3: RECIPE BUILDER
+        ====================================================== */
+        #screen-recipe .recipe-topbar {
+            flex-shrink: 0;
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 12px; height: 56px;
+            border-bottom: 1px solid var(--border); background: var(--surface2);
+        }
+        #screen-recipe .recipe-topbar-title {
+            font-size: 14px; font-weight: 600; color: var(--text-muted);
+        }
+
+        #screen-recipe .recipe-body {
+            flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
+            padding: 14px; display: flex; flex-direction: column; gap: 14px;
+            touch-action: pan-y;
+        }
+
+        /* Crafting section */
+        #screen-recipe .recipe-craft-section {
+            display: flex; flex-direction: column; align-items: center; gap: 10px;
+            background: var(--surface); border-radius: 14px;
+            border: 1px solid var(--border); padding: 14px;
+        }
+        #screen-recipe .recipe-craft-section h3 {
+            font-size: 12px; font-weight: 600; color: var(--text-muted);
+            align-self: flex-start;
+        }
+        #screen-recipe .recipe-crafting-area {
+            display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: center;
+        }
+        #screen-recipe .recipe-crafting-grid {
+            display: grid; grid-template-columns: repeat(3, 52px);
+            grid-template-rows: repeat(3, 52px); gap: 3px;
+        }
+        #screen-recipe .recipe-craft-slot {
+            width: 52px; height: 52px;
+            background: var(--bg); border: 2px solid var(--border);
+            border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; position: relative;
+            transition: border-color 0.15s, background 0.15s;
+        }
+        #screen-recipe .recipe-craft-slot:active,
+        #screen-recipe .recipe-craft-slot.rb-hover { background: #2a3a28; border-color: var(--primary); }
+        #screen-recipe .recipe-craft-slot img {
+            width: 36px; height: 36px;
+            image-rendering: pixelated; pointer-events: none;
+        }
+        #screen-recipe .recipe-craft-arrow {
+            font-size: 24px; color: var(--text-muted);
+        }
+        #screen-recipe .recipe-output-wrapper {
+            display: flex; flex-direction: column; align-items: center; gap: 4px;
+        }
+        #screen-recipe .recipe-output-label {
+            font-size: 11px; color: var(--text-muted);
+        }
+        #screen-recipe .recipe-output-slot {
+            width: 60px; height: 60px;
+            background: var(--bg); border: 2px solid var(--primary);
+            border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; position: relative;
+            transition: border-color 0.15s, background 0.15s;
+        }
+        #screen-recipe .recipe-output-slot:active,
+        #screen-recipe .recipe-output-slot.rb-hover { background: #2a3a28; border-color: var(--primary-light); }
+        #screen-recipe .recipe-output-slot img {
+            width: 42px; height: 42px;
+            image-rendering: pixelated; pointer-events: none;
+        }
+        #screen-recipe .recipe-output-slot.rb-locked {
+            cursor: default; border-color: var(--primary-light);
+            opacity: 0.9;
+        }
+        #screen-recipe .recipe-output-slot.rb-locked:active { background: var(--bg); border-color: var(--primary-light); }
+
+        #screen-recipe .recipe-slot-tooltip {
+            display: none; position: absolute; bottom: 110%; left: 50%;
+            transform: translateX(-50%);
+            background: #1a1a2e; color: var(--text);
+            font-size: 11px; padding: 4px 8px; border-radius: 6px;
+            border: 1px solid var(--primary); white-space: nowrap;
+            z-index: 100; pointer-events: none;
+        }
+        #screen-recipe .recipe-craft-slot:hover .recipe-slot-tooltip,
+        #screen-recipe .recipe-output-slot:hover .recipe-slot-tooltip { display: block; }
+
+        #screen-recipe .recipe-controls {
+            display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;
+            width: 100%;
+        }
+        #screen-recipe .recipe-btn {
+            background: var(--surface2); border: 1px solid var(--border);
+            color: var(--text); padding: 8px 16px; border-radius: 8px;
+            font-size: 13px; font-weight: 500; cursor: pointer;
+            transition: background 0.15s;
+        }
+        #screen-recipe .recipe-btn:active { background: #3a3a3a; }
+        #screen-recipe .recipe-btn.primary { background: var(--primary); border-color: var(--primary); }
+
+        /* Items section */
+        #screen-recipe .recipe-items-section {
+            display: flex; flex-direction: column; gap: 8px;
+            background: var(--surface); border-radius: 14px;
+            border: 1px solid var(--border); padding: 14px;
+            min-height: 0;
+        }
+        #screen-recipe .recipe-items-section h3 {
+            font-size: 12px; font-weight: 600; color: var(--text-muted);
+        }
+        #screen-recipe .recipe-search-row {
+            display: flex; align-items: center; gap: 8px;
+        }
+        #screen-recipe #recipe-search {
+            flex: 1; background: var(--bg); border: 1px solid var(--border);
+            border-radius: 8px; padding: 9px 12px;
+            color: var(--text); font-size: 14px; outline: none;
+            touch-action: manipulation;
+        }
+        #screen-recipe #recipe-search:focus { border-color: var(--primary); }
+        #screen-recipe #recipe-item-count {
+            font-size: 11px; color: var(--text-muted); white-space: nowrap;
+        }
+        #screen-recipe #recipe-item-grid-wrapper {
+            max-height: 320px; overflow-y: auto; -webkit-overflow-scrolling: touch;
+            touch-action: pan-y;
+        }
+        #screen-recipe #recipe-item-grid {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(52px, 1fr));
+            gap: 4px;
+        }
+        #screen-recipe .recipe-item-cell {
+            width: 52px; height: 52px;
+            background: var(--bg); border: 2px solid var(--border);
+            border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; position: relative;
+            transition: border-color 0.15s, background 0.15s;
+        }
+        #screen-recipe .recipe-item-cell:active { background: #2a3a28; border-color: var(--primary); }
+        #screen-recipe .recipe-item-cell.rb-selected { border-color: var(--primary-light); background: #2a3a28; }
+        #screen-recipe .recipe-item-cell img {
+            width: 36px; height: 36px;
+            image-rendering: pixelated; pointer-events: none;
+        }
+        #screen-recipe .recipe-item-cell .recipe-slot-tooltip { display: none; }
+        #screen-recipe .recipe-item-cell:hover .recipe-slot-tooltip { display: block; }
+        #screen-recipe #recipe-loading-status {
+            font-size: 12px; color: var(--text-muted); text-align: center; padding: 4px 0;
+        }
+
+        /* Selected item bar (mobile) */
+        #recipe-selected-bar {
+            flex-shrink: 0;
+            display: flex; align-items: center; gap: 10px;
+            padding: 10px 14px;
+            border-top: 1px solid var(--border); background: var(--surface2);
+            padding-bottom: max(10px, env(safe-area-inset-bottom));
+        }
+        #recipe-selected-bar img {
+            width: 32px; height: 32px; image-rendering: pixelated; flex-shrink: 0;
+        }
+        #recipe-selected-name {
+            flex: 1; font-size: 13px; font-weight: 500; color: var(--primary-light);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        #recipe-deselect-btn {
+            background: var(--surface); border: 1px solid var(--border);
+            color: var(--text); padding: 6px 12px; border-radius: 8px;
+            font-size: 13px; cursor: pointer;
+        }
+        #recipe-deselect-btn:active { background: #3a3a3a; }
+
+        /* Desktop cursor follow */
+        #recipe-cursor-item {
+            position: fixed; pointer-events: none; z-index: 9999; display: none;
+        }
+        #recipe-cursor-item img {
+            width: 32px; height: 32px; image-rendering: pixelated;
+            filter: drop-shadow(2px 2px 3px rgba(0,0,0,0.7));
         }
     </style>
 </head>
 <body>
-    <div id="canvas-wrapper">
-        <!-- Canvas content will go here -->
+
+<!-- ================================================================
+     SCREEN 1: HOME
+================================================================ -->
+<div id="screen-home" class="screen screen-active">
+    <div class="home-header">
+        <span class="home-title"><i class="ph ph-sword"></i> WeaponForge</span>
+        <input type="text" id="project-name" class="project-name-input" placeholder="My Project" autocomplete="off" spellcheck="false">
     </div>
-    <script>
-        /* --- Prevent iOS bounce / pinch-to-zoom and Double-Tap Zoom on canvas wrapper --- */
-        const canvasArea = document.getElementById('canvas-wrapper'); // Changed from canvas-area so it doesn't break floating buttons
+
+    <div class="weapon-grid" id="weapon-grid">
+        <!-- populated by JS -->
+    </div>
+
+    <div class="home-actions">
+        <button class="action-btn primary" id="btn-export" disabled><i class="ph ph-package"></i> Export .mcaddon</button>
+        <button class="action-btn" id="btn-save"><i class="ph ph-floppy-disk"></i> Save Project</button>
+        <button class="action-btn" id="btn-load"><i class="ph ph-folder-open"></i> Load Project</button>
+        <button class="action-btn" id="btn-new-project"><i class="ph ph-plus-circle"></i> New Project</button>
+    </div>
+</div>
+
+<!-- ================================================================
+     SCREEN 2: EDITOR
+================================================================ -->
+<div id="screen-editor" class="screen">
+    <div class="editor-topbar">
+        <button class="topbar-btn" id="btn-back">← Back</button>
+        <span class="editor-topbar-title" id="editor-weapon-title">Weapon</span>
+        <button class="topbar-btn primary" id="btn-save-weapon"><i class="ph ph-floppy-disk"></i> Save</button>
+    </div>
+
+    <!-- Canvas area -->
+    <div id="canvas-area">
+        <div id="canvas-wrapper">
+            <canvas id="c"></canvas>
+        </div>
+
+        <!-- Pinned color palette -->
+        <div class="pinned-container">
+            <div class="palette-fab" id="main-fab">
+                <i class="ph-fill ph-paint-brush-broad"></i>
+            </div>
+            <div class="pinned-strip" id="pinned-strip">
+                <div class="add-pin-btn" id="add-pin-trigger"><i class="ph ph-plus"></i></div>
+            </div>
+        </div>
+
+        <!-- Undo / Redo -->
+        <div class="top-right-controls">
+            <button class="icon-btn" id="undo-btn" disabled><i class="ph ph-arrow-u-up-left"></i></button>
+            <button class="icon-btn" id="redo-btn" disabled><i class="ph ph-arrow-u-up-right"></i></button>
+            <button class="icon-btn" id="onion-front-btn" title="Toggle Onion Skin Visibility"><i class="ph ph-eye"></i></button>
+        </div>
+
+        <!-- Radial tool menu -->
+        <div class="bottom-left-menu" id="menu-container">
+            <div class="radial-wheel-wrapper">
+                <div class="radial-wheel" id="radial-wheel"></div>
+            </div>
+            <button class="main-fab-btn" id="main-add-btn"><i class="ph ph-plus"></i></button>
+        </div>
+
+        <!-- Onion skin drawer -->
+        <div class="bottom-drawer" id="onion-drawer">
+            <div class="drawer-header">
+                <span><i class="ph ph-ghost"></i> Trace Vanilla Item</span>
+                <button class="close-btn" id="close-onion"><i class="ph ph-x"></i></button>
+            </div>
+            <div>
+                <span class="slider-label">Onion Skin Opacity</span>
+                <input type="range" id="onion-opacity" min="0.1" max="1" step="0.1" value="0.5">
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:4px;">
+                <button class="btn-primary" data-onion="sword"><i class="ph ph-sword"></i> Sword</button>
+                <button class="btn-primary" data-onion="pickaxe"><i class="ph ph-pickaxe"></i> Pickaxe</button>
+                <button class="btn-primary" data-onion="axe"><i class="ph ph-axe"></i> Axe</button>
+                <button class="btn-primary" data-onion="shovel"><i class="ph ph-shovel"></i> Shovel</button>
+                <button class="btn-primary" data-onion="hoe"><i class="ph ph-plant"></i> Hoe</button>
+                <button class="btn-primary" data-onion="trident"><i class="ph ph-lightning"></i> Trident</button>
+                <button class="btn-primary" data-onion="spear"><i class="ph ph-arrow-up-right"></i> Spear</button>
+                <button class="btn-primary" data-onion="mace"><i class="ph ph-gavel"></i> Mace</button>
+                <button class="btn-primary" style="background:#555" data-onion="clear"><i class="ph ph-x"></i> Clear</button>
+            </div>
+        </div>
+
+        <!-- Background color drawer -->
+        <div class="bottom-drawer" id="bg-drawer">
+            <div class="drawer-header">
+                <span><i class="ph ph-monitor"></i> Visibility Background</span>
+                <button class="close-btn" id="close-bg"><i class="ph ph-x"></i></button>
+            </div>
+            <span class="slider-label">Does not affect exported texture.</span>
+            <div class="bg-swatch-container">
+                <div class="bg-swatch" style="background:#121212;" data-bg="#121212"></div>
+                <div class="bg-swatch" style="background:#555555;" data-bg="#555555"></div>
+                <div class="bg-swatch" style="background:#e0e0e0;" data-bg="#e0e0e0"></div>
+                <div class="bg-swatch" style="background:#00ff00;" data-bg="#00ff00"></div>
+            </div>
+        </div>
+    </div><!-- end #canvas-area -->
+
+    <div class="editor-divider"></div>
+
+    <!-- Stats panel -->
+    <div class="stats-panel" id="stats-panel">
+        <div class="stat-group">
+            <label class="stat-label"><i class="ph ph-pencil"></i> Display Name</label>
+            <input type="text" id="stat-display-name" class="stat-input" placeholder="Fire Sword" autocomplete="off">
+        </div>
+
+        <div class="stat-group">
+            <label class="stat-label"><i class="ph ph-tag"></i> Internal ID (auto-generated)</label>
+            <input type="text" id="stat-internal-id" class="stat-input" readonly tabindex="-1">
+        </div>
+
+        <div class="stat-group">
+            <label class="stat-label"><i class="ph ph-sword"></i> Weapon Type</label>
+            <select id="stat-weapon-type" class="stat-input">
+                <option value="sword">Sword</option>
+                <option value="pickaxe">Pickaxe</option>
+                <option value="axe">Axe</option>
+                <option value="shovel">Shovel</option>
+                <option value="hoe">Hoe</option>
+            </select>
+        </div>
+
+        <div class="stat-group">
+            <label class="stat-label"><i class="ph ph-lightning"></i> How hard it hits</label>
+            <div class="slider-row">
+                <input type="range" id="stat-damage" min="1" max="30" step="1" value="7">
+                <span class="slider-value" id="stat-damage-val">7</span>
+            </div>
+        </div>
+
+        <div class="stat-group">
+            <label class="stat-label"><i class="ph ph-timer"></i> How fast it swings (cooldown in seconds)</label>
+            <div class="slider-row">
+                <input type="range" id="stat-cooldown" min="0.1" max="4.0" step="0.1" value="0.4">
+                <span class="slider-value" id="stat-cooldown-val">0.4s</span>
+            </div>
+        </div>
+
+        <div class="stat-group">
+            <label class="stat-label"><i class="ph ph-shield"></i> How long it lasts (durability)</label>
+            <div class="slider-row">
+                <input type="range" id="stat-durability" min="1" max="5000" step="1" value="500">
+                <span class="slider-value" id="stat-durability-val">500</span>
+            </div>
+        </div>
+
+        <div class="stat-group">
+            <label class="stat-label"><i class="ph ph-stack"></i> Max Stack Size</label>
+            <div class="info-text">Always 1 — weapons can't be stacked in Minecraft.</div>
+        </div>
+
+        <div class="stat-group">
+            <label class="stat-label"><i class="ph ph-wrench"></i> Repair Material</label>
+            <select id="stat-repair" class="stat-input">
+                <option value="">None</option>
+                <option value="Iron Ingot">Iron Ingot</option>
+                <option value="Gold Ingot">Gold Ingot</option>
+                <option value="Diamond">Diamond</option>
+                <option value="Netherite Ingot">Netherite Ingot</option>
+                <option value="Planks">Planks</option>
+                <option value="Cobblestone">Cobblestone</option>
+            </select>
+        </div>
+
+        <div class="stat-group">
+            <div class="toggle-row">
+                <span class="toggle-label">✨ Enchanted Glow</span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="stat-enchanted">
+                    <span class="toggle-track"></span>
+                </label>
+            </div>
+        </div>
+
+        <div class="stat-group">
+            <label class="stat-label">🪄 Shoots Magic</label>
+            <select id="stat-projectile" class="stat-input">
+                <option value="">None (Melee Only)</option>
+                <option value="fireball">Fireball</option>
+                <option value="snowball">Snowball</option>
+                <option value="arrow">Arrow</option>
+                <option value="wither_skull">Wither Skull</option>
+                <option value="llama_spit">Llama Spit</option>
+            </select>
+        </div>
+
+        <div class="stat-group">
+            <div class="toggle-row">
+                <span class="toggle-label">🍎 Is Edible</span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="stat-edible">
+                    <span class="toggle-track"></span>
+                </label>
+            </div>
+            <div class="slider-row" style="margin-top: 6px;">
+                <span class="stat-label" style="width: 80px;">Nutrition:</span>
+                <input type="range" id="stat-nutrition" min="1" max="20" step="1" value="4">
+                <span class="slider-value" id="stat-nutrition-val">4</span>
+            </div>
+        </div>
+
+        <div class="stat-group">
+            <label class="stat-label">⛏️ Mining Speed Multiplier</label>
+            <div class="slider-row">
+                <input type="range" id="stat-mining-speed" min="1" max="50" step="1" value="1">
+                <span class="slider-value" id="stat-mining-speed-val">1x</span>
+            </div>
+            <div class="info-text">1x is normal. 50x is instant-break for most blocks!</div>
+        </div>
+
+        <div class="stat-group">
+            <div class="toggle-row">
+                <span class="toggle-label"><i class="ph ph-hand"></i> Can Use Off-hand</span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="stat-offhand">
+                    <span class="toggle-track"></span>
+                </label>
+            </div>
+        </div>
+
+        <div class="stat-group" style="border-top:1px solid rgba(255,255,255,0.12);padding-top:12px;margin-top:4px;">
+            <label class="stat-label" style="font-size:1.1em;font-weight:700;letter-spacing:0.04em;">⚡ Special Abilities</label>
+        </div>
+
+        <div class="stat-group">
+            <div class="toggle-row">
+                <span class="toggle-label">🎆 Firework Burst</span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="stat-firework-burst">
+                    <span class="toggle-track"></span>
+                </label>
+            </div>
+            <div class="info-text">Shoots fireworks on use (adds projectile &amp; throwable components).</div>
+        </div>
+
+        <div class="stat-group">
+            <div class="toggle-row">
+                <span class="toggle-label">🔴 Redstone Trail</span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="stat-redstone-trail">
+                    <span class="toggle-track"></span>
+                </label>
+            </div>
+            <div class="info-text">Places redstone wire on blocks when used.</div>
+        </div>
+
+        <div class="stat-group">
+            <label class="stat-label">🏹 Magic Arrows</label>
+            <select class="stat-input" id="stat-arrow-type">
+                <option value="">None</option>
+                <option value="spectral">Spectral Arrow</option>
+                <option value="poison">Tipped — Poison</option>
+                <option value="harming">Tipped — Harming</option>
+                <option value="healing">Tipped — Healing</option>
+                <option value="slowness">Tipped — Slowness</option>
+                <option value="weakness">Tipped — Weakness</option>
+            </select>
+        </div>
+
+        <div class="stat-group">
+            <label class="stat-label">🌱 Seed Planter</label>
+            <select class="stat-input" id="stat-seed-type">
+                <option value="">None</option>
+                <option value="wheat_seeds">Wheat Seeds</option>
+                <option value="beetroot_seeds">Beetroot Seeds</option>
+                <option value="melon_seeds">Melon Seeds</option>
+                <option value="pumpkin_seeds">Pumpkin Seeds</option>
+                <option value="carrots">Carrot</option>
+                <option value="potatoes">Potato</option>
+            </select>
+        </div>
+
+        <div class="stat-group">
+            <div class="toggle-row">
+                <span class="toggle-label">🐕 Can Tame Pets</span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="stat-pet-tamer">
+                    <span class="toggle-track"></span>
+                </label>
+            </div>
+            <div class="info-text">Makes item interactable for taming animals.</div>
+        </div>
+
+        <div style="height:16px;flex-shrink:0;"></div>
+
+        <button class="action-btn primary define-recipe-btn" id="btn-define-recipe"><i class="ph ph-cooking-pot"></i> ⚒️ Define Recipe</button>
+
+        <div style="height:16px;flex-shrink:0;"></div>
+    </div><!-- end .stats-panel -->
+</div><!-- end #screen-editor -->
+
+<!-- ================================================================
+     SCREEN 3: RECIPE BUILDER
+================================================================ -->
+<div id="screen-recipe" class="screen">
+    <div class="recipe-topbar">
+        <button class="topbar-btn" id="btn-recipe-back">← Back</button>
+        <span class="recipe-topbar-title">⚒️ Recipe Builder</span>
+        <button class="topbar-btn primary" id="btn-save-recipe"><i class="ph ph-floppy-disk"></i> Save</button>
+    </div>
+
+    <div class="recipe-body">
+        <!-- Crafting section -->
+        <div class="recipe-craft-section">
+            <h3><i class="ph ph-cooking-pot"></i> Crafting Grid</h3>
+            <div class="recipe-crafting-area">
+                <div class="recipe-crafting-grid" id="recipe-crafting-grid">
+                    <!-- populated by JS -->
+                </div>
+                <div class="recipe-craft-arrow">➡</div>
+                <div class="recipe-output-wrapper">
+                    <div class="recipe-output-label">Result</div>
+                    <div class="recipe-output-slot" id="recipe-output-slot"></div>
+                </div>
+            </div>
+            <div class="recipe-controls">
+                <button class="recipe-btn" id="recipe-clear-btn"><i class="ph ph-trash"></i> Clear Grid</button>
+            </div>
+        </div>
+
+        <!-- Items section -->
+        <div class="recipe-items-section">
+            <h3><i class="ph ph-package"></i> Items</h3>
+            <div class="recipe-search-row">
+                <input type="text" id="recipe-search" placeholder="Search items…" autocomplete="off">
+                <span id="recipe-item-count"></span>
+            </div>
+            <div id="recipe-item-grid-wrapper">
+                <div id="recipe-item-grid"></div>
+            </div>
+            <div id="recipe-loading-status">Tap "Recipe Builder" to load items.</div>
+        </div>
+    </div>
+
+    <!-- Selected item bar (shown when an item is picked up) -->
+    <div id="recipe-selected-bar" style="display:none;">
+        <img id="recipe-selected-icon" src="" alt="">
+        <span id="recipe-selected-name">No item selected</span>
+        <button id="recipe-deselect-btn">✕ Deselect</button>
+    </div>
+</div>
+
+<!-- Desktop cursor-follow for recipe builder -->
+<div id="recipe-cursor-item"><img src="" alt=""></div>
+
+<!-- ================================================================
+     COLOR PICKER OVERLAY
+================================================================ -->
+<div class="picker-overlay" id="picker-overlay">
+    <div class="picker-card" id="picker-card">
+        <div id="iro-container"></div>
+        <button class="btn-primary accent" id="confirm-pin-btn" style="width:100%;">Select Color</button>
+    </div>
+</div>
+
+<!-- ================================================================
+     LOAD PROJECT MODAL
+================================================================ -->
+<div class="modal-overlay" id="modal-load">
+    <div class="modal-sheet">
+        <div class="modal-header">
+            <span class="modal-title"><i class="ph ph-folder-open"></i> Load Project</span>
+            <button class="close-btn" id="close-modal-load"><i class="ph ph-x"></i></button>
+        </div>
+        <div class="modal-body" id="project-list"></div>
+        <button class="modal-btn" id="close-load-btn">Cancel</button>
+    </div>
+</div>
+
+<!-- ================================================================
+     EXPORT SUCCESS MODAL
+================================================================ -->
+<div class="modal-overlay" id="modal-export-success">
+    <div class="modal-sheet">
+        <div class="modal-header">
+            <span class="modal-title"><i class="ph ph-check-circle"></i> Pack Exported!</span>
+            <button class="close-btn" id="close-modal-export"><i class="ph ph-x"></i></button>
+        </div>
+        <div class="modal-body" id="export-success-body"></div>
+        <button class="modal-btn primary" id="close-export-btn">Done</button>
+    </div>
+</div>
+
+<!-- ================================================================
+     DELETE WEAPON CONFIRM
+================================================================ -->
+<div class="delete-confirm-overlay" id="delete-confirm-overlay">
+    <div class="delete-confirm-card">
+        <div class="delete-confirm-title"><i class="ph ph-trash"></i> Delete Weapon?</div>
+        <div class="delete-confirm-msg" id="delete-confirm-msg">This cannot be undone.</div>
+        <div class="delete-confirm-actions">
+            <button class="btn-cancel" id="delete-cancel-btn">Cancel</button>
+            <button class="btn-danger" id="delete-confirm-btn">Delete</button>
+        </div>
+    </div>
+</div>
+
+<!-- ================================================================
+     GENERIC CONFIRM DIALOG
+================================================================ -->
+<div class="delete-confirm-overlay" id="generic-confirm-overlay">
+    <div class="delete-confirm-card">
+        <div class="delete-confirm-title" id="generic-confirm-title">Are you sure?</div>
+        <div class="delete-confirm-msg"   id="generic-confirm-msg"></div>
+        <div class="delete-confirm-actions">
+            <button class="btn-cancel" id="generic-cancel-btn">Cancel</button>
+            <button class="btn-danger" id="generic-ok-btn">OK</button>
+        </div>
+    </div>
+</div>
+
+<script>
+'use strict';
+
+/* ================================================================
+   INDEXED DB WRAPPER
+================================================================ */
+const DB = {
+    _db: null,
+
+    open() {
+        return new Promise((resolve, reject) => {
+            const req = indexedDB.open('weaponforge-db', 1);
+            req.onupgradeneeded = e => e.target.result.createObjectStore('projects', { keyPath: 'id' });
+            req.onsuccess  = e => { this._db = e.target.result; resolve(); };
+            req.onerror    = e => reject(e.target.error);
+        });
+    },
+
+    put(project) {
+        return new Promise((resolve, reject) => {
+            const tx = this._db.transaction('projects', 'readwrite');
+            tx.objectStore('projects').put(project);
+            tx.oncomplete = resolve;
+            tx.onerror    = e => reject(e.target.error);
+        });
+    },
+
+    getAll() {
+        return new Promise((resolve, reject) => {
+            const tx  = this._db.transaction('projects', 'readonly');
+            const req = tx.objectStore('projects').getAll();
+            req.onsuccess = e => resolve(e.target.result);
+            req.onerror   = e => reject(e.target.error);
+        });
+    },
+
+    remove(id) {
+        return new Promise((resolve, reject) => {
+            const tx = this._db.transaction('projects', 'readwrite');
+            tx.objectStore('projects').delete(id);
+            tx.oncomplete = resolve;
+            tx.onerror    = e => reject(e.target.error);
+        });
+    }
+};
+
+/* ================================================================
+   MOBILE-FRIENDLY CONFIRM DIALOG
+================================================================ */
+let _gcResolve = null;
+
+function wfConfirm(title, msg, okLabel = 'OK', danger = false) {
+    return new Promise(resolve => {
+        _gcResolve = resolve;
+        document.getElementById('generic-confirm-title').textContent = title;
+        document.getElementById('generic-confirm-msg').textContent   = msg || '';
+        const okBtn = document.getElementById('generic-ok-btn');
+        okBtn.textContent = okLabel;
+        okBtn.className   = danger ? 'btn-danger' : 'btn-cancel';
+        document.getElementById('generic-confirm-overlay').classList.add('active');
+    });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('generic-ok-btn').addEventListener('click', () => {
+        document.getElementById('generic-confirm-overlay').classList.remove('active');
+        if (_gcResolve) { _gcResolve(true); _gcResolve = null; }
+    });
+    document.getElementById('generic-cancel-btn').addEventListener('click', () => {
+        document.getElementById('generic-confirm-overlay').classList.remove('active');
+        if (_gcResolve) { _gcResolve(false); _gcResolve = null; }
+    });
+    document.getElementById('generic-confirm-overlay').addEventListener('click', e => {
+        if (e.target === e.currentTarget) {
+            document.getElementById('generic-confirm-overlay').classList.remove('active');
+            if (_gcResolve) { _gcResolve(false); _gcResolve = null; }
+        }
+    });
+});
+
+/* ================================================================
+   CONSTANTS
+================================================================ */
+const WEAPON_TYPE_ICONS = { sword:'<i class="ph ph-sword"></i>', pickaxe:'<i class="ph ph-pickaxe"></i>', axe:'<i class="ph ph-axe"></i>', shovel:'<i class="ph ph-shovel"></i>', hoe:'<i class="ph ph-plant"></i>', trident:'<i class="ph ph-lightning"></i>', spear:'<i class="ph ph-arrow-up-right"></i>', mace:'<i class="ph ph-gavel"></i>' };
+
+const WEAPON_DEFAULTS = {
+    sword:   { damage:7,  cooldown:0.4, durability:500, repairMaterial:'Iron Ingot' },
+    pickaxe: { damage:5,  cooldown:0.8, durability:500, repairMaterial:'Iron Ingot' },
+    axe:     { damage:9,  cooldown:1.2, durability:500, repairMaterial:'Iron Ingot' },
+    shovel:  { damage:4,  cooldown:0.6, durability:500, repairMaterial:'Iron Ingot' },
+    hoe:     { damage:2,  cooldown:0.4, durability:500, repairMaterial:'Iron Ingot' },
+    trident: { damage:9,  cooldown:1.1, durability:250, repairMaterial:'Diamond' },
+    spear:   { damage:6,  cooldown:0.7, durability:400, repairMaterial:'Iron Ingot' },
+    mace:    { damage:10, cooldown:1.5, durability:500, repairMaterial:'Diamond' },
+};
+
+const REPAIR_MAP = {
+    'Iron Ingot':'iron_ingot', 'Gold Ingot':'gold_ingot',
+    'Diamond':'diamond',       'Netherite Ingot':'netherite_ingot',
+    'Planks':'planks',         'Cobblestone':'cobblestone',
+};
+
+/* ================================================================
+   APP STATE
+================================================================ */
+const AppState = {
+    currentProject:   null,
+    editingWeaponId:  null,
+    activeColor: localStorage.getItem('wf_color') || 'rgba(57,181,230,1)',
+    pinnedColors: (() => {
+        try { return JSON.parse(localStorage.getItem('wf_pinned')) || null; } catch(_) { return null; }
+    })() || [
+        'rgba(57,181,230,1)', 'rgba(46,179,168,1)', 'rgba(92,92,92,1)',
+        'rgba(97,63,35,1)',   'rgba(255,255,255,1)', 'rgba(0,0,0,1)'
+    ],
+    currentTool: 'pencil',
+
+    saveColors() {
+        localStorage.setItem('wf_color',  this.activeColor);
+        localStorage.setItem('wf_pinned', JSON.stringify(this.pinnedColors));
+    }
+};
+
+/* ================================================================
+   HELPERS
+================================================================ */
+function genId()      { return crypto.randomUUID(); }
+function emptyPixels(){ return Array.from({length:16}, () => Array(16).fill('transparent')); }
+
+function genInternalId(name) {
+    return (name || '').toLowerCase()
+        .replace(/\s+/g, '_')
+        .replace(/[^a-z0-9_]/g, '')
+        .replace(/^_+|_+$/g, '') || 'weapon';
+}
+
+function showToast(msg, ms = 2200) {
+    const el = document.createElement('div');
+    el.className = 'toast';
+    el.textContent = msg;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), ms);
+}
+
+function makeWeapon(type = 'sword') {
+    const d = WEAPON_DEFAULTS[type];
+    return {
+        id: genId(), displayName: 'New Weapon',
+        internalId: 'new_weapon', weaponType: type,
+        damage: d.damage, cooldown: d.cooldown,
+        durability: d.durability, repairMaterial: d.repairMaterial,
+        allowOffHand: false,
+
+        // --- NEW DATA FIELDS ---
+        isEnchanted: false,
+        projectile: '',
+        isEdible: false,
+        nutrition: 4,
+        miningSpeed: 1,
+        fireworkBurst: false,
+        redstoneTrail: false,
+        arrowType: '',
+        seedType: '',
+        petTamer: false,
+        // -----------------------
+
+        pixelData: emptyPixels(),
+        createdAt: Date.now(), updatedAt: Date.now()
+    };
+}
+
+function makeProject() {
+    return {
+        id: genId(), name: 'My Project',
+        namespace: 'weaponforge', weapons: [], recipes: [],
+        rpUUID: genId(), bpUUID: genId(),
+        createdAt: Date.now(), updatedAt: Date.now()
+    };
+}
+
+/* ================================================================
+   PIXEL DATA → PNG base64  (works without canvas manager being active)
+================================================================ */
+function pixelsToPng(pixelData, size = 16) {
+    const c   = document.createElement('canvas');
+    c.width   = size; c.height = size;
+    const ctx = c.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    const scale = size / 16;
+    for (let y = 0; y < 16; y++) {
+        for (let x = 0; x < 16; x++) {
+            const fill = pixelData[y][x];
+            if (fill && fill !== 'transparent') {
+                ctx.fillStyle = fill;
+                ctx.fillRect(
+                    Math.round(x * scale), Math.round(y * scale),
+                    Math.max(1, Math.round(scale)), Math.max(1, Math.round(scale))
+                );
+            }
+        }
+    }
+    return c.toDataURL('image/png').split(',')[1];
+}
+
+function drawPreview(pixelData, canvas) {
+    const ctx   = canvas.getContext('2d');
+    const scale = canvas.width / 16;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    for (let y = 0; y < 16; y++) {
+        for (let x = 0; x < 16; x++) {
+            const fill = pixelData[y][x];
+            if (fill && fill !== 'transparent') {
+                ctx.fillStyle = fill;
+                ctx.fillRect(x * scale, y * scale, scale, scale);
+            }
+        }
+    }
+}
+
+/* ================================================================
+   CANVAS MANAGER
+================================================================ */
+class CanvasManager {
+    constructor() {
+        this.canvas   = null;
+        this.pixels   = [];
+        this.isPainting = false;
+        this.stateChangedThisStroke = false;
+        this.onionSkin = null;
+        this.onionFrontActive = false;
+        this.undoStack = [];
+        this.redoStack = [];
+        this._ready    = false;
+    }
+
+    init() {
+        if (this._ready) { this.resize(); return; }
+
+        this.canvas = new fabric.Canvas('c', {
+            selection: false,
+            defaultCursor: 'crosshair',
+            preserveObjectStacking: true,
+            fireRightClick: true,
+            stopContextMenu: true
+        });
+
+        
+        this._buildGrid();
+        this._bindEvents();
+        this.saveState();
+        this.resize()
+        this._ready = true;
+    }
+
+    resize() {
+        if (!this.canvas) return;
+        const w = document.getElementById('canvas-wrapper');
+        if (!w) return;
+        this.canvas.setWidth(w.clientWidth);
+        this.canvas.setHeight(w.clientHeight);
+        this._centerGrid();
+    }
+
+    _buildGrid() {
+        const ps = 20;
+        for (let y = 0; y < 16; y++) {
+            this.pixels[y] = [];
+            for (let x = 0; x < 16; x++) {
+                const r = new fabric.Rect({
+                    left: x * ps, top: y * ps, width: ps, height: ps,
+                    fill: 'transparent',
+                    stroke: 'rgba(255,255,255,0.08)', strokeWidth: 1,
+                    selectable: false, hoverCursor: 'crosshair',
+                    data: { x, y }
+                });
+                this.pixels[y][x] = r;
+                this.canvas.add(r);
+            }
+        }
+        this._centerGrid();
+    }
+
+    _centerGrid() {
+    if (!this.canvas) return;
+    const gridPx = 16 * 20;
+    const fitDim = Math.min(this.canvas.width, this.canvas.height);
+    const scale  = fitDim / (gridPx * 1.35);  // increased from 1.05 to clear corner buttons
+    this.canvas.setViewportTransform([
+        scale, 0, 0, scale,
+        (this.canvas.width  - gridPx * scale) / 2,
+        (this.canvas.height - gridPx * scale) / 2
+    ]);
+}
+
+        _bindEvents() {
+        this.canvas.on('mouse:down', o => {
+            if (!o.target) return;
+            // Prevent drawing a dot if this is a multi-touch (e.g. pinch)
+            if (o.e && o.e.touches && o.e.touches.length > 1) return;
+            this.isPainting = true;
+            this.stateChangedThisStroke = false;
+            this._paint(o.target);
+        });
+        this.canvas.on('mouse:over', o => {
+            if (o.e && o.e.touches && o.e.touches.length > 1) return;
+            if (this.isPainting && o.target) this._paint(o.target);
+        });
+        this.canvas.on('mouse:up', () => {
+            this.isPainting = false;
+            if (this.stateChangedThisStroke) this.saveState();
+        });
+
+        // 1. Desktop zoom via mouse wheel
+        this.canvas.on('mouse:wheel', (opt) => {
+            opt.e.preventDefault();
+            opt.e.stopPropagation();
+            let delta = opt.e.deltaY;
+            let zoom = this.canvas.getZoom();
+            zoom *= 0.999 ** delta;
+            if (zoom > 20) zoom = 20;
+            if (zoom < 0.1) zoom = 0.1;
+            this.canvas.zoomToPoint({ x: opt.e.offsetX, y: opt.e.offsetY }, zoom);
+        });
+
+        // 2. Mobile pinch-to-zoom and pan
+        const upperCanvas = this.canvas.upperCanvasEl;
+        let initialDistance = null;
+        let initialZoom = 1;
+        let lastPanPoint = null;
+
+        upperCanvas.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 2) {
+                e.preventDefault(); // Stop default browser zoom/scroll
+                this.isPainting = false; 
+                
+                const x1 = e.touches[0].clientX;
+                const y1 = e.touches[0].clientY;
+                const x2 = e.touches[1].clientX;
+                const y2 = e.touches[1].clientY;
+
+                initialDistance = Math.hypot(x1 - x2, y1 - y2);
+                initialZoom = this.canvas.getZoom();
+                lastPanPoint = { x: (x1 + x2) / 2, y: (y1 + y2) / 2 };
+            }
+        }, { passive: false });
+
+        upperCanvas.addEventListener('touchmove', (e) => {
+            if (e.touches.length === 2 && initialDistance !== null && lastPanPoint !== null) {
+                e.preventDefault();
+                this.isPainting = false;
+                
+                const x1 = e.touches[0].clientX;
+                const y1 = e.touches[0].clientY;
+                const x2 = e.touches[1].clientX;
+                const y2 = e.touches[1].clientY;
+                
+                const currentDistance = Math.hypot(x1 - x2, y1 - y2);
+                const currentCenter = { x: (x1 + x2) / 2, y: (y1 + y2) / 2 };
+
+                // Handle panning (translation)
+                const vpt = this.canvas.viewportTransform;
+                const dx = currentCenter.x - lastPanPoint.x;
+                const dy = currentCenter.y - lastPanPoint.y;
+                vpt[4] += dx;
+                vpt[5] += dy;
+                this.canvas.requestRenderAll();
+
+                // Handle zooming
+                const scale = currentDistance / initialDistance;
+                let newZoom = initialZoom * scale;
+                
+                // Clamp zoom limits
+                if (newZoom < 0.1) newZoom = 0.1;
+                if (newZoom > 20) newZoom = 20;
+                
+                // Zoom directly into the center point of the pinch
+                const rect = upperCanvas.getBoundingClientRect();
+                const centerPoint = new fabric.Point(
+                    currentCenter.x - rect.left,
+                    currentCenter.y - rect.top
+                );
+                
+                this.canvas.zoomToPoint(centerPoint, newZoom);
+                lastPanPoint = currentCenter;
+            }
+        }, { passive: false });
+
+        upperCanvas.addEventListener('touchend', (e) => {
+            if (e.touches.length < 2) {
+                initialDistance = null;
+                lastPanPoint = null;
+            }
+        }, { passive: false });
+    }
+
+    /* ---- history ---- */
+    _snapshot() { return this.pixels.map(row => row.map(r => r.fill)); }
+
+    _applySnapshot(snap) {
+        for (let y = 0; y < 16; y++) {
+            for (let x = 0; x < 16; x++) {
+                this._setPixel(this.pixels[y][x], snap[y][x]);
+            }
+        }
+        this.canvas.requestRenderAll();
+    }
+
+    saveState() {
+        this.undoStack.push(this._snapshot());
+        this.redoStack = [];
+        if (this.undoStack.length > 50) this.undoStack.shift();
+        document.dispatchEvent(new CustomEvent('history-changed'));
+    }
+
+    undo() {
+        if (this.undoStack.length <= 1) return;
+        this.redoStack.push(this.undoStack.pop());
+        this._applySnapshot(this.undoStack[this.undoStack.length - 1]);
+        document.dispatchEvent(new CustomEvent('history-changed'));
+    }
+
+    redo() {
+        if (!this.redoStack.length) return;
+        const s = this.redoStack.pop();
+        this.undoStack.push(s);
+        this._applySnapshot(s);
+        document.dispatchEvent(new CustomEvent('history-changed'));
+    }
+
+    /* ---- painting ---- */
+    _setPixel(rect, color) {
+        rect.set('fill',   color);
+        rect.set('stroke', color === 'transparent' ? 'rgba(255,255,255,0.08)' : 'transparent');
+    }
+
+    _tint(colorStr, amt) {
+        if (!colorStr || colorStr === 'transparent') return 'transparent';
+        const s = new fabric.Color(colorStr).getSource();
+        const clamp = v => Math.max(0, Math.min(255, v));
+        return `rgba(${clamp(s[0]+amt)},${clamp(s[1]+amt)},${clamp(s[2]+amt)},${s[3]})`;
+    }
+
+    _paint(rect) {
+        if (!rect || !rect.data) return;
+        const old  = rect.fill;
+        const tool = AppState.currentTool;
+
+        if (tool === 'picker') {
+            if (old !== 'transparent') {
+                AppState.activeColor = old;
+                AppState.saveColors();
+                document.dispatchEvent(new CustomEvent('color-picked'));
+            }
+            return;
+        }
+        if (tool === 'fill') {
+            this._floodFill(rect.data.x, rect.data.y, AppState.activeColor);
+            return;
+        }
+
+        let next = old;
+        if      (tool === 'pencil')  next = AppState.activeColor;
+        else if (tool === 'eraser')  next = 'transparent';
+        else if (tool === 'lighten') next = this._tint(old,  25);
+        else if (tool === 'darken')  next = this._tint(old, -25);
+
+        if (next !== old) {
+            this._setPixel(rect, next);
+            this.stateChangedThisStroke = true;
+            this.canvas.requestRenderAll();
+        }
+    }
+
+    _floodFill(sx, sy, fillColor) {
+        const target  = this.pixels[sy][sx].fill;
+        if (target === fillColor) return;
+        const stack   = [[sx, sy]];
+        const visited = new Set();
+        let changed   = false;
+        while (stack.length) {
+            const [x, y] = stack.pop();
+            if (x < 0 || x >= 16 || y < 0 || y >= 16) continue;
+            const key = y * 16 + x;
+            if (visited.has(key)) continue;
+            if (this.pixels[y][x].fill !== target) continue;
+            visited.add(key);
+            this._setPixel(this.pixels[y][x], fillColor);
+            changed = true;
+            stack.push([x+1,y],[x-1,y],[x,y+1],[x,y-1]);
+        }
+        if (changed) { this.canvas.requestRenderAll(); this.saveState(); }
+    }
+
+    clearGrid() {
+        for (let y = 0; y < 16; y++)
+            for (let x = 0; x < 16; x++)
+                this._setPixel(this.pixels[y][x], 'transparent');
+        this.canvas.requestRenderAll();
+        this.saveState();
+    }
+
+    loadPixels(pixelData) {
+        for (let y = 0; y < 16; y++) {
+            for (let x = 0; x < 16; x++) {
+                const c = (pixelData && pixelData[y] && pixelData[y][x]) ? pixelData[y][x] : 'transparent';
+                this._setPixel(this.pixels[y][x], c);
+            }
+        }
+        this.canvas.requestRenderAll();
+        this.undoStack = [this._snapshot()];
+        this.redoStack = [];
+        document.dispatchEvent(new CustomEvent('history-changed'));
+    }
+
+    extractPixels() {
+        return this.pixels.map(row => row.map(r => r.fill));
+    }
+
+    /* ---- onion skin ---- */
+    setOnionSkin(url) {
+        this.clearOnionSkin();
+        if (!url) return;
+        fabric.Image.fromURL(url, img => {
+            img.scaleToWidth(16 * 20);
+            img.set({
+                left: 0, top: 0,
+                opacity: parseFloat(document.getElementById('onion-opacity').value) || 0.5,
+                selectable: false, evented: false, excludeFromExport: true,
+                imageSmoothing: false
+            });
+            this.canvas.add(img);
+            if (this.onionFrontActive) {
+                img.bringToFront();
+                img.set({ opacity: 1 });
+            } else {
+                img.sendToBack();
+            }
+            this.onionSkin = img;
+            this.canvas.requestRenderAll();
+        }, { crossOrigin: 'anonymous' }); // crossOrigin prevents CORS-tainted canvas when loading external GitHub textures
+    }
+
+    clearOnionSkin() {
+        if (this.onionSkin) {
+            this.canvas.remove(this.onionSkin);
+            this.onionSkin = null;
+            this.canvas.requestRenderAll();
+        }
+    }
+}
+
+/* ================================================================
+   HOME SCREEN RENDERING
+================================================================ */
+function renderHome() {
+    const p    = AppState.currentProject;
+    const grid = document.getElementById('weapon-grid');
+    grid.innerHTML = '';
+    if (!p) return;
+
+    document.getElementById('project-name').value = p.name;
+
+    p.weapons.forEach(weapon => {
+        const card = document.createElement('div');
+        card.className = 'weapon-card';
+        card.dataset.id = weapon.id;
+
+        const preview = document.createElement('canvas');
+        preview.className = 'weapon-preview-canvas';
+        preview.width  = 64; preview.height = 64;
+        drawPreview(weapon.pixelData, preview);
+
+        const icon = WEAPON_TYPE_ICONS[weapon.weaponType] || '<i class="ph ph-sword"></i>';
+
+        card.innerHTML = `
+            <div class="damage-badge"><i class="ph ph-lightning"></i> ${weapon.damage}</div>
+        `;
+        card.insertAdjacentElement('afterbegin', preview);
+
+        const info = document.createElement('div');
+        info.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:4px;width:100%;';
+        info.innerHTML = `
+            <div class="weapon-card-name">${escHtml(weapon.displayName)}</div>
+            <div class="weapon-card-meta"><span>${icon}</span><span style="font-size:11px;color:var(--text-muted)">${weapon.weaponType}</span></div>
+        `;
+        card.appendChild(info);
+
+        /* Long-press → delete confirm */
+        let pressTimer;
+        let didLongPress = false;
+        card.addEventListener('touchstart', () => {
+            didLongPress = false;
+            pressTimer = setTimeout(() => {
+                didLongPress = true;
+                showDeleteConfirm(weapon.id, weapon.displayName);
+            }, 600);
+        }, { passive: true });
+        card.addEventListener('touchend',   () => clearTimeout(pressTimer));
+        card.addEventListener('touchmove',  () => clearTimeout(pressTimer), { passive: true });
+        card.addEventListener('click',      () => { if (!didLongPress) openEditor(weapon.id); });
+
+        grid.appendChild(card);
+    });
+
+    /* "+ New Weapon" card */
+    const addCard = document.createElement('div');
+    addCard.className = 'weapon-card add-weapon-card';
+    addCard.innerHTML = `<div class="add-icon">+</div><div class="weapon-card-name">New Weapon</div>`;
+    addCard.addEventListener('click', () => {
+        const w = makeWeapon('sword');
+        AppState.currentProject.weapons.push(w);
+        openEditor(w.id);
+    });
+    grid.appendChild(addCard);
+
+    document.getElementById('btn-export').disabled = p.weapons.length === 0;
+}
+
+function escHtml(s) {
+    return String(s)
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ================================================================
+   DELETE WEAPON CONFIRM
+================================================================ */
+let _pendingDeleteId = null;
+
+function showDeleteConfirm(weaponId, name) {
+    _pendingDeleteId = weaponId;
+    document.getElementById('delete-confirm-msg').textContent =
+        `Delete "${name}"? This cannot be undone.`;
+    document.getElementById('delete-confirm-overlay').classList.add('active');
+}
+function hideDeleteConfirm() {
+    _pendingDeleteId = null;
+    document.getElementById('delete-confirm-overlay').classList.remove('active');
+}
+
+/* ================================================================
+   SCREEN NAVIGATION
+================================================================ */
+let cm = null; // CanvasManager singleton
+let editorReady = false;
+
+function navigateTo(screenId, fromScreenId) {
+    document.getElementById(fromScreenId).classList.remove('screen-active');
+    document.getElementById(screenId).classList.add('screen-active');
+
+    if (screenId === 'screen-editor') {
+        const editorEl = document.getElementById('screen-editor');
+        let done = false;
+        let fallback;
+        const initEditor = () => {
+            if (done) return;
+            done = true;
+            clearTimeout(fallback);
+            if (!cm) {
+                cm = new CanvasManager();
+                cm.init();
+                bindEditorEvents();
+            } else {
+                cm.resize();
+            }
+        };
+        editorEl.addEventListener('transitionend', function onTransitionEnd() {
+            editorEl.removeEventListener('transitionend', onTransitionEnd);
+            initEditor();
+        });
+        fallback = setTimeout(initEditor, 350);
+    }
+}
+
+function navigateBack() {
+    if (AppState.editingWeaponId && cm && cm._ready) {
+        saveCurrentWeapon(/* quiet */ true);
+    }
+    document.getElementById('screen-editor').classList.remove('screen-active');
+    document.getElementById('screen-home').classList.add('screen-active');
+    AppState.editingWeaponId = null;
+    renderHome();
+}
+
+/* ================================================================
+   EDITOR – OPEN / SAVE
+================================================================ */
+function openEditor(weaponId) {
+    const p      = AppState.currentProject;
+    const weapon = p.weapons.find(w => w.id === weaponId);
+    if (!weapon) return;
+
+    AppState.editingWeaponId = weaponId;
+
+    /* Populate stats */
+    const dn = document.getElementById('stat-display-name');
+    dn.value = weapon.displayName;
+    document.getElementById('stat-internal-id').value  = weapon.internalId;
+    document.getElementById('stat-weapon-type').value  = weapon.weaponType;
+    document.getElementById('stat-damage').value       = weapon.damage;
+    document.getElementById('stat-damage-val').textContent   = weapon.damage;
+    document.getElementById('stat-cooldown').value     = weapon.cooldown;
+    document.getElementById('stat-cooldown-val').textContent = weapon.cooldown.toFixed(1) + 's';
+    document.getElementById('stat-durability').value   = weapon.durability;
+    document.getElementById('stat-durability-val').textContent = weapon.durability;
+    document.getElementById('stat-repair').value       = weapon.repairMaterial || '';
+    document.getElementById('stat-offhand').checked    = weapon.allowOffHand || false;
+    document.getElementById('stat-enchanted').checked  = weapon.isEnchanted || false;
+    document.getElementById('stat-projectile').value   = weapon.projectile || '';
+    document.getElementById('stat-edible').checked     = weapon.isEdible || false;
+    document.getElementById('stat-nutrition').value    = weapon.nutrition || 4;
+    document.getElementById('stat-nutrition-val').textContent = weapon.nutrition || 4;
+    document.getElementById('stat-mining-speed').value = weapon.miningSpeed || 1;
+    document.getElementById('stat-mining-speed-val').textContent = (weapon.miningSpeed || 1) + 'x';
+    document.getElementById('stat-firework-burst').checked = weapon.fireworkBurst || false;
+    document.getElementById('stat-redstone-trail').checked = weapon.redstoneTrail || false;
+    document.getElementById('stat-arrow-type').value       = weapon.arrowType || '';
+    document.getElementById('stat-seed-type').value        = weapon.seedType || '';
+    document.getElementById('stat-pet-tamer').checked      = weapon.petTamer || false;
+    document.getElementById('editor-weapon-title').textContent = weapon.displayName;
+
+    navigateTo('screen-editor', 'screen-home');
+
+    /* Load pixels once canvas is initialised */
+    setTimeout(() => {
+        if (cm && cm._ready) cm.loadPixels(weapon.pixelData);
+    }, 120);
+}
+
+function saveCurrentWeapon(quiet = false) {
+    if (!AppState.editingWeaponId || !AppState.currentProject) return;
+    const p      = AppState.currentProject;
+    const weapon = p.weapons.find(w => w.id === AppState.editingWeaponId);
+    if (!weapon) return;
+
+    const displayName      = (document.getElementById('stat-display-name').value || '').trim() || 'My Weapon';
+    weapon.displayName     = displayName;
+    weapon.internalId      = genInternalId(displayName);
+    weapon.weaponType      = document.getElementById('stat-weapon-type').value;
+    weapon.damage          = parseInt(document.getElementById('stat-damage').value,    10);
+    weapon.cooldown        = parseFloat(document.getElementById('stat-cooldown').value);
+    weapon.durability      = parseInt(document.getElementById('stat-durability').value, 10);
+    weapon.repairMaterial  = document.getElementById('stat-repair').value;
+    weapon.allowOffHand    = document.getElementById('stat-offhand').checked;
+    weapon.isEnchanted     = document.getElementById('stat-enchanted').checked;
+    weapon.projectile      = document.getElementById('stat-projectile').value;
+    weapon.isEdible        = document.getElementById('stat-edible').checked;
+    weapon.nutrition       = parseInt(document.getElementById('stat-nutrition').value, 10);
+    weapon.miningSpeed     = parseInt(document.getElementById('stat-mining-speed').value, 10);
+    weapon.fireworkBurst   = document.getElementById('stat-firework-burst').checked;
+    weapon.redstoneTrail   = document.getElementById('stat-redstone-trail').checked;
+    weapon.arrowType       = document.getElementById('stat-arrow-type').value;
+    weapon.seedType        = document.getElementById('stat-seed-type').value;
+    weapon.petTamer        = document.getElementById('stat-pet-tamer').checked;
+    weapon.pixelData       = cm ? cm.extractPixels() : weapon.pixelData;
+    weapon.updatedAt       = Date.now();
+    p.updatedAt            = Date.now();
+
+    document.getElementById('editor-weapon-title').textContent = displayName;
+    if (!quiet) showToast('Weapon saved!');
+}
+
+/* ================================================================
+   EDITOR EVENTS  (bound once after canvas init)
+================================================================ */
+function bindEditorEvents() {
+    if (editorReady) return;
+    editorReady = true;
+
+    /* --- Stats panel wiring --- */
+    const dnInput = document.getElementById('stat-display-name');
+    dnInput.addEventListener('input', () => {
+        document.getElementById('stat-internal-id').value = genInternalId(dnInput.value);
+        document.getElementById('editor-weapon-title').textContent = dnInput.value || 'Weapon';
+    });
+
+    document.getElementById('stat-weapon-type').addEventListener('change', function() {
+        const d = WEAPON_DEFAULTS[this.value];
+        if (!d) return;
+        document.getElementById('stat-damage').value       = d.damage;
+        document.getElementById('stat-damage-val').textContent   = d.damage;
+        document.getElementById('stat-cooldown').value     = d.cooldown;
+        document.getElementById('stat-cooldown-val').textContent = d.cooldown.toFixed(1) + 's';
+        document.getElementById('stat-durability').value   = d.durability;
+        document.getElementById('stat-durability-val').textContent = d.durability;
+        document.getElementById('stat-repair').value       = d.repairMaterial;
+    });
+
+    document.getElementById('stat-damage').addEventListener('input', function() {
+        document.getElementById('stat-damage-val').textContent = this.value;
+    });
+    document.getElementById('stat-cooldown').addEventListener('input', function() {
+        document.getElementById('stat-cooldown-val').textContent = parseFloat(this.value).toFixed(1) + 's';
+    });
+    document.getElementById('stat-durability').addEventListener('input', function() {
+        document.getElementById('stat-durability-val').textContent = this.value;
+    });
+    document.getElementById('stat-nutrition').addEventListener('input', function() {
+        document.getElementById('stat-nutrition-val').textContent = this.value;
+    });
+    document.getElementById('stat-mining-speed').addEventListener('input', function() {
+        document.getElementById('stat-mining-speed-val').textContent = this.value + 'x';
+    });
+
+    /* --- Undo/Redo --- */
+    document.getElementById('undo-btn').addEventListener('click', () => cm.undo());
+    document.getElementById('redo-btn').addEventListener('click', () => cm.redo());
+    document.addEventListener('history-changed', () => {
+        document.getElementById('undo-btn').disabled = cm.undoStack.length <= 1;
+        document.getElementById('redo-btn').disabled = cm.redoStack.length === 0;
+    });
+
+    /* --- Color events --- */
+    document.addEventListener('color-picked', () => { updateFab(); renderStrip(); });
+    document.getElementById('main-fab').addEventListener('click', () => {
+        document.getElementById('pinned-strip').classList.toggle('visible');
+    });
+    document.getElementById('add-pin-trigger').addEventListener('click', e => {
+        e.stopPropagation(); openColorPicker();
+    });
+
+    /* --- Drawers --- */
+    document.getElementById('onion-front-btn').addEventListener('click', function() {
+        if (!cm) return;
+        cm.onionFrontActive = !cm.onionFrontActive;
+        this.style.color = cm.onionFrontActive ? 'var(--primary-light)' : '';
+        if (cm.onionSkin) {
+            if (cm.onionFrontActive) {
+                cm.onionSkin.bringToFront();
+                cm.onionSkin.set('opacity', 1);
+            } else {
+                cm.onionSkin.sendToBack();
+                cm.onionSkin.set('opacity', parseFloat(document.getElementById('onion-opacity').value) || 0.5);
+            }
+            cm.canvas.requestRenderAll();
+        }
+    });
+
+    document.getElementById('onion-opacity').addEventListener('input', function() {
+        if (!cm) return;
+        if (cm.onionSkin && !cm.onionFrontActive) {
+            cm.onionSkin.set('opacity', parseFloat(this.value));
+            cm.canvas.requestRenderAll();
+        }
+    });
+    document.getElementById('close-onion').addEventListener('click', () =>
+        document.getElementById('onion-drawer').classList.remove('visible'));
+    document.getElementById('close-bg').addEventListener('click', () =>
+        document.getElementById('bg-drawer').classList.remove('visible'));
+
+    document.querySelectorAll('[data-bg]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.getElementById('canvas-area').style.background = btn.dataset.bg;
+            document.getElementById('bg-drawer').classList.remove('visible');
+        });
+    });
+
+    document.querySelectorAll('[data-onion]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const type = btn.dataset.onion;
+            if (type === 'clear') { cm.clearOnionSkin(); }
+            else {
+                const ONION_TEXTURE_OVERRIDES = {
+                    trident: 'https://raw.githubusercontent.com/InventivetalentDev/minecraft-assets/1.20.1/assets/minecraft/textures/item/trident.png',
+                    spear:   'https://raw.githubusercontent.com/InventivetalentDev/minecraft-assets/1.20.1/assets/minecraft/textures/item/trident.png',
+                    mace:    'https://raw.githubusercontent.com/InventivetalentDev/minecraft-assets/1.20.1/assets/minecraft/textures/item/stone_sword.png',
+                };
+                const url = ONION_TEXTURE_OVERRIDES[type] ||
+                    `https://raw.githubusercontent.com/InventivetalentDev/minecraft-assets/1.20.1/assets/minecraft/textures/item/stone_${type}.png`;
+                cm.setOnionSkin(url);
+            }
+            document.getElementById('onion-drawer').classList.remove('visible');
+        });
+    });
+
+    /* --- Canvas-area dismiss on tap --- */
+    ['mousedown','touchstart'].forEach(ev => {
+        document.getElementById('canvas-wrapper').addEventListener(ev, dismissOverlays, { passive: true });
+    });
+
+    /* --- Back & save --- */
+    document.getElementById('btn-back').addEventListener('click', navigateBack);
+    document.getElementById('btn-save-weapon').addEventListener('click', () => {
+        saveCurrentWeapon();
+        saveProject();
+    });
+
+    /* --- Define Recipe --- */
+    document.getElementById('btn-define-recipe').addEventListener('click', openRecipeBuilder);
+
+        /* --- Prevent iOS bounce / pinch-to-zoom and Double-Tap Zoom on canvas area --- */
+                const canvasArea = document.getElementById('canvas-wrapper'); // Changed from canvas-area so it doesn't break floating buttons XXXX
         let lastCanvasTouchEnd = 0;
-    </script>
+    
+    // Prevent double-tap zoom natively without breaking rapid single-tap drawing
+    canvasArea.addEventListener('touchend', e => {
+        const now = Date.now();
+        if (now - lastCanvasTouchEnd <= 300) {
+            e.preventDefault(); 
+        }
+        lastCanvasTouchEnd = now;
+    }, { passive: false });
+
+    canvasArea.addEventListener('touchmove', e => {
+        e.preventDefault();
+    }, { passive: false });
+    canvasArea.addEventListener('gesturestart', e => e.preventDefault());
+    canvasArea.addEventListener('gesturechange', e => e.preventDefault());
+
+    /* --- Radial menu --- */
+    buildRadialMenu();
+
+    /* --- Initial strip --- */
+    updateFab();
+    renderStrip();
+}
+
+function dismissOverlays() {
+    const mc = document.getElementById('menu-container');
+    if (mc.classList.contains('menu-open')) toggleRadial();
+    document.getElementById('pinned-strip').classList.remove('visible');
+    document.getElementById('onion-drawer').classList.remove('visible');
+    document.getElementById('bg-drawer').classList.remove('visible');
+}
+
+/* ================================================================
+   RADIAL MENU
+================================================================ */
+const TOOLS = [
+    { id:'pencil',     icon:'ph-pencil-simple', label:'Pencil'     },
+    { id:'eraser',     icon:'ph-eraser',         label:'Eraser'     },
+    { id:'fill',       icon:'ph-paint-bucket',   label:'Fill'       },
+    { id:'picker',     icon:'ph-eyedropper',     label:'Eyedropper' },
+    { id:'lighten',    icon:'ph-sun',            label:'Lighten'    },
+    { id:'darken',     icon:'ph-moon',           label:'Darken'     },
+    { id:'ghost',      icon:'ph-ghost',          label:'Trace'      },
+    { id:'background', icon:'ph-monitor',        label:'Background' },
+    { id:'clear',      icon:'ph-trash',          label:'Clear'      },
+];
+
+const radState = { cur: 0, tgt: 0, dragging: false, raf: null };
+
+function buildRadialMenu() {
+    const wheel = document.getElementById('radial-wheel');
+    wheel.innerHTML = TOOLS.map(t =>
+        `<div class="radial-item" data-action="${t.id}" title="${t.label}"><i class="ph ${t.icon}"></i></div>`
+    ).join('');
+
+    const items  = wheel.querySelectorAll('.radial-item');
+    const R      = 95;
+    const step   = (2 * Math.PI) / items.length;
+
+    items.forEach((item, i) => {
+        const angle = (i * step) - (Math.PI / 2);
+        item.dataset.baseAngle = angle;
+        item.style.transform   = `translate(${R * Math.cos(angle)}px,${R * Math.sin(angle)}px)`;
+        item.addEventListener('click', e => {
+            e.stopPropagation();
+            if (!radState.dragging) handleTool(item.dataset.action);
+        });
+    });
+
+    /* Touch rotation */
+    let startA = 0, lastTgt = 0;
+    const getA = (x, y) => {
+        const r  = wheel.getBoundingClientRect();
+        return Math.atan2(y - (r.top + r.height/2), x - (r.left + r.width/2)) * (180/Math.PI);
+    };
+    wheel.addEventListener('touchstart', e => {
+        radState.dragging = false;
+        startA   = getA(e.touches[0].clientX, e.touches[0].clientY);
+        lastTgt  = radState.tgt;
+        if (!radState.raf) animateRadial();
+    }, { passive: true });
+    wheel.addEventListener('touchmove', e => {
+        e.preventDefault();
+        radState.dragging = true;
+        radState.tgt = lastTgt + (getA(e.touches[0].clientX, e.touches[0].clientY) - startA);
+    }, { passive: false });
+    wheel.addEventListener('touchend', () => { setTimeout(() => { radState.dragging = false; }, 50); });
+
+    document.getElementById('main-add-btn').addEventListener('click', toggleRadial);
+    markActiveTool();
+}
+
+function animateRadial() {
+    radState.cur += (radState.tgt - radState.cur) * 0.15;
+    const off = radState.cur * (Math.PI / 180);
+    const R   = 95;
+    document.querySelectorAll('.radial-item').forEach(item => {
+        const a = parseFloat(item.dataset.baseAngle) + off;
+        item.style.transform = `translate(${R * Math.cos(a)}px,${R * Math.sin(a)}px)`;
+    });
+    const still = Math.abs(radState.tgt - radState.cur) < 0.05;
+    const open  = document.getElementById('menu-container').classList.contains('menu-open');
+    if (!still || radState.dragging || open) {
+        radState.raf = requestAnimationFrame(animateRadial);
+    } else {
+        radState.raf = null;
+    }
+}
+
+function toggleRadial() {
+    const mc   = document.getElementById('menu-container');
+    const open = mc.classList.toggle('menu-open');
+    document.getElementById('main-add-btn').classList.toggle('open');
+    if (open && !radState.raf) animateRadial();
+}
+
+function handleTool(action) {
+    toggleRadial();
+    if (action === 'ghost') {
+        document.getElementById('onion-drawer').classList.add('visible');
+    } else if (action === 'background') {
+        document.getElementById('bg-drawer').classList.add('visible');
+    } else if (action === 'clear') {
+        wfConfirm('Clear Canvas?', 'This will erase all pixels. Cannot be undone.', 'Clear', true)
+            .then(ok => { if (ok && cm) cm.clearGrid(); });
+    } else {
+        AppState.currentTool = action;
+        markActiveTool();
+        showToast(TOOLS.find(t => t.id === action)?.label || action);
+    }
+}
+
+function markActiveTool() {
+    document.querySelectorAll('.radial-item').forEach(el =>
+        el.classList.toggle('active', el.dataset.action === AppState.currentTool)
+    );
+}
+
+/* ================================================================
+   COLOR PALETTE
+================================================================ */
+let iroPicker = null;
+
+function updateFab() {
+    const f = document.getElementById('main-fab');
+    if (f) f.style.background = AppState.activeColor;
+}
+
+function renderStrip() {
+    const strip  = document.getElementById('pinned-strip');
+    if (!strip) return;
+    const addBtn = document.getElementById('add-pin-trigger');
+    Array.from(strip.children).forEach(c => { if (!c.id) c.remove(); });
+
+    AppState.pinnedColors.forEach(c => {
+        const div = document.createElement('div');
+        div.className = `pin-swatch${c === AppState.activeColor ? ' active-swatch' : ''}`;
+        div.style.backgroundImage = 'conic-gradient(#ccc 25%,#fff 25% 50%,#ccc 50% 75%,#fff 75%)';
+        div.style.backgroundSize  = '8px 8px';
+
+        const inner = document.createElement('div');
+        inner.style.cssText = 'width:100%;height:100%;border-radius:50%;';
+        inner.style.backgroundColor = c;
+        div.appendChild(inner);
+
+        div.addEventListener('click', () => {
+            AppState.activeColor = c;
+            AppState.saveColors();
+            AppState.currentTool = 'pencil';
+            updateFab(); renderStrip(); markActiveTool();
+        });
+
+        let lpt;
+        div.addEventListener('touchstart', () => {
+            lpt = setTimeout(() => {
+                wfConfirm('Remove Color?', 'Remove this color from the palette?', 'Remove', true)
+                    .then(ok => {
+                        if (ok) {
+                            AppState.pinnedColors = AppState.pinnedColors.filter(x => x !== c);
+                            AppState.saveColors(); renderStrip();
+                        }
+                    });
+            }, 600);
+        }, { passive: true });
+        div.addEventListener('touchend', () => clearTimeout(lpt));
+
+        strip.insertBefore(div, addBtn);
+    });
+}
+
+function openColorPicker() {
+    if (!iroPicker) {
+        iroPicker = new iro.ColorPicker('#iro-container', {
+            width: 240, color: AppState.activeColor, transparency: true,
+            layout: [
+                { component: iro.ui.Wheel },
+                { component: iro.ui.Slider, options: { sliderType: 'value' } },
+                { component: iro.ui.Slider, options: { sliderType: 'alpha' } }
+            ]
+        });
+        document.getElementById('confirm-pin-btn').addEventListener('click', () => {
+            const c = iroPicker.color.rgbaString;
+            AppState.pinnedColors.push(c);
+            AppState.activeColor = c;
+            AppState.saveColors();
+            renderStrip(); updateFab();
+            document.getElementById('picker-overlay').classList.remove('active');
+            AppState.currentTool = 'pencil';
+            markActiveTool();
+        });
+        document.getElementById('picker-overlay').addEventListener('click', e => {
+            if (e.target.id === 'picker-overlay')
+                document.getElementById('picker-overlay').classList.remove('active');
+        });
+    }
+    iroPicker.color.set(AppState.activeColor);
+    document.getElementById('picker-overlay').classList.add('active');
+}
+
+/* ================================================================
+   PROJECT PERSISTENCE
+================================================================ */
+async function saveProject() {
+    if (!AppState.currentProject) return;
+    const name = document.getElementById('project-name').value.trim();
+    AppState.currentProject.name      = name || 'My Project';
+    AppState.currentProject.updatedAt = Date.now();
+    try {
+        await DB.put(AppState.currentProject);
+        showToast('Project saved!');
+    } catch(e) {
+        console.error(e);
+        showToast('Save failed');
+    }
+}
+
+async function loadMostRecent() {
+    const all = await DB.getAll();
+    if (!all.length) return null;
+    return all.sort((a, b) => (b.updatedAt||0) - (a.updatedAt||0))[0];
+}
+
+async function openLoadModal() {
+    const all  = await DB.getAll();
+    const list = document.getElementById('project-list');
+    list.innerHTML = '';
+
+    if (!all.length) {
+        list.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:24px 0;">No saved projects yet</div>';
+    } else {
+        all.sort((a, b) => (b.updatedAt||0) - (a.updatedAt||0)).forEach(proj => {
+            const item = document.createElement('div');
+            item.className = 'project-list-item';
+            item.innerHTML = `
+                <div>
+                  <div class="project-list-name">${escHtml(proj.name)}</div>
+                  <div class="project-list-meta">${proj.weapons.length} weapon${proj.weapons.length !== 1 ? 's' : ''} · ${new Date(proj.updatedAt).toLocaleDateString()}</div>
+                </div>
+                <button class="delete-project-btn" data-pid="${proj.id}"><i class="ph ph-trash"></i></button>
+            `;
+            item.addEventListener('click', async e => {
+                if (e.target.closest('.delete-project-btn')) return;
+                AppState.currentProject = proj;
+                document.getElementById('modal-load').classList.remove('active');
+                renderHome();
+                showToast(`Loaded "${proj.name}"`);
+            });
+            item.querySelector('.delete-project-btn').addEventListener('click', async e => {
+                e.stopPropagation();
+                const ok = await wfConfirm('Delete Project?', `Delete "${proj.name}"? This cannot be undone.`, 'Delete', true);
+                if (ok) {
+                    await DB.remove(proj.id);
+                    await openLoadModal();
+                    showToast('Deleted');
+                }
+            });
+            list.appendChild(item);
+        });
+    }
+    document.getElementById('modal-load').classList.add('active');
+}
+
+/* ================================================================
+   .mcaddon EXPORT
+================================================================ */
+async function exportMcaddon() {
+    const p = AppState.currentProject;
+    if (!p || !p.weapons.length) { showToast('No weapons to export'); return; }
+
+    showToast('Building pack…');
+
+    try {
+        const zip      = new JSZip();
+        const rpDir    = zip.folder('resource_pack');
+        const bpDir    = zip.folder('behavior_pack');
+
+        /* Stable UUIDs — stored in project so re-exports are consistent */
+        if (!p.rpUUID) p.rpUUID = genId();
+        if (!p.bpUUID) p.bpUUID = genId();
+        const rpHeaderUUID = p.rpUUID;
+        const rpModUUID    = genId();
+        const bpHeaderUUID = p.bpUUID;
+        const bpModUUID    = genId();
+        const projName     = p.name || 'WeaponForge Project';
+
+        /* ---- Manifests ---- */
+        rpDir.file('manifest.json', JSON.stringify({
+            format_version: 2,
+            header: {
+                name: `${projName} Resources`,
+                description: 'Resource pack created with WeaponForge',
+                uuid: rpHeaderUUID, version: [1,0,0], min_engine_version: [1,20,0]
+            },
+            modules: [{ type: 'resources', uuid: rpModUUID, version: [1,0,0] }]
+        }, null, 2));
+
+        bpDir.file('manifest.json', JSON.stringify({
+            format_version: 2,
+            header: {
+                name: `${projName} Behaviors`,
+                description: 'Behavior pack created with WeaponForge',
+                uuid: bpHeaderUUID, version: [1,0,0], min_engine_version: [1,20,0]
+            },
+            modules: [{ type: 'data', uuid: bpModUUID, version: [1,0,0] }],
+            dependencies: [{ uuid: rpHeaderUUID, version: [1,0,0] }]
+        }, null, 2));
+
+        /* ---- Pack icons (256×256 nearest-neighbor from first weapon) ---- */
+        const iconB64 = pixelsToPng(p.weapons[0].pixelData, 256);
+        rpDir.file('pack_icon.png', iconB64, { base64: true });
+        bpDir.file('pack_icon.png', iconB64, { base64: true });
+
+        /* ---- item_texture.json ---- */
+        const textureData = {};
+        p.weapons.forEach(w => {
+            textureData[w.internalId] = { textures: `textures/items/${w.internalId}` };
+        });
+        rpDir.file('textures/item_texture.json', JSON.stringify({
+            resource_pack_name: `${projName} Resources`,
+            texture_name:  'atlas.items',
+            texture_data: textureData
+        }, null, 2));
+
+        /* ---- Per-weapon files ---- */
+        const texDir = rpDir.folder('textures/items');
+        const itmDir = bpDir.folder('items');
+
+        for (const w of p.weapons) {
+            /* 16×16 PNG texture */
+            texDir.file(`${w.internalId}.png`, pixelsToPng(w.pixelData, 16), { base64: true });
+
+            /* Behavior item JSON */
+            const components = {
+                'minecraft:icon':         w.internalId,
+                'minecraft:display_name': { value: w.displayName },
+                'minecraft:hand_equipped': true,
+                'minecraft:max_stack_size': 1,
+                'minecraft:durability':   { max_durability: w.durability },
+                'minecraft:damage':        w.damage,
+                'minecraft:cooldown':     { category: w.weaponType, duration: w.cooldown },
+                'minecraft:allow_off_hand': w.allowOffHand || false
+            };
+
+            // 1. Enchanted Glow
+            if (w.isEnchanted) {
+                components['minecraft:foil'] = true;
+            }
+
+            // 2. Magic Projectiles
+            if (w.projectile && w.projectile !== '') {
+                components['minecraft:projectile'] = {
+                    "projectile_entity": `minecraft:${w.projectile}`
+                };
+                components['minecraft:throwable'] = {
+                    "do_swing_animation": true
+                };
+            }
+
+            // 3. Edible
+            if (w.isEdible) {
+                components['minecraft:food'] = {
+                    "nutrition": w.nutrition,
+                    "can_always_eat": true
+                };
+            }
+
+            // 4. Super Miner
+            if (w.miningSpeed > 1) {
+                components['minecraft:digger'] = {
+                    "use_efficiency": true,
+                    "destroy_speeds": [
+                        {
+                            "block": { "tags": "q.any_tag('stone', 'metal', 'dirt', 'wood', 'sand', 'gravel')" },
+                            "speed": w.miningSpeed
+                        }
+                    ]
+                };
+            }
+
+            // 5. Firework Burst
+            if (w.fireworkBurst) {
+                components['minecraft:projectile'] = {
+                    "projectile_entity": "minecraft:fireworks_rocket"
+                };
+                components['minecraft:throwable'] = {
+                    "do_swing_animation": true
+                };
+            }
+
+            // 6. Redstone Trail (note: Seed Planter below takes precedence if both are enabled)
+            if (w.redstoneTrail) {
+                components['minecraft:block_placer'] = {
+                    "block": "minecraft:redstone_wire",
+                    "use_on": ["minecraft:stone", "minecraft:dirt", "minecraft:grass"]
+                };
+            }
+
+            // 7. Magic Arrows
+            if (w.arrowType && w.arrowType !== '') {
+                const arrowItem = w.arrowType === 'spectral' ? 'minecraft:spectral_arrow' : 'minecraft:arrow';
+                components['minecraft:shooter'] = {
+                    "ammunition": [{ "item": arrowItem, "use_offhand": true, "search_inventory": true }],
+                    "max_draw_duration": 1.0,
+                    "charge_on_draw": true
+                };
+                components['minecraft:use_modifiers'] = {
+                    "use_duration": 1.0,
+                    "movement_modifier": 0.35
+                };
+            }
+
+            // 8. Seed Planter (overwrites Redstone Trail's block_placer if both are enabled)
+            if (w.seedType && w.seedType !== '') {
+                const seedBlocks = {
+                    wheat_seeds: "minecraft:wheat",
+                    beetroot_seeds: "minecraft:beetroot",
+                    melon_seeds: "minecraft:melon_stem",
+                    pumpkin_seeds: "minecraft:pumpkin_stem",
+                    carrots: "minecraft:carrots",
+                    potatoes: "minecraft:potatoes"
+                };
+                components['minecraft:block_placer'] = {
+                    "block": seedBlocks[w.seedType] || "minecraft:wheat",
+                    "use_on": ["minecraft:farmland"]
+                };
+            }
+
+            // 9. Pet Tamer (preserves existing food component nutrition if isEdible is also set)
+            if (w.petTamer) {
+                components['minecraft:food'] = components['minecraft:food'] || {
+                    "nutrition": 0,
+                    "can_always_eat": true
+                };
+                components['minecraft:interact_button'] = { "button_text": "Tame" };
+            }
+
+            if (w.repairMaterial && REPAIR_MAP[w.repairMaterial]) {
+                components['minecraft:repairable'] = {
+                    repair_items: [{
+                        items: [`minecraft:${REPAIR_MAP[w.repairMaterial]}`],
+                        // Molang: restores item's remaining durability + 5% of its max durability per repair item used
+                        repair_amount: 'context.other->query.remaining_durability + 0.05 * context.other->query.max_durability'
+                    }]
+                };
+            }
+
+            itmDir.file(`${w.internalId}.json`, JSON.stringify({
+                format_version: '1.20.0',
+                'minecraft:item': {
+                    description: {
+                        identifier: `${p.namespace}:${w.internalId}`,
+                        category: 'equipment'
+                    },
+                    components
+                }
+            }, null, 2));
+        }
+
+        /* ---- Crafting recipes ---- */
+        if (p.recipes && p.recipes.length) {
+            const recDir = bpDir.folder('recipes');
+            const CHARS  = 'ABCDEFGHI';
+            p.recipes.forEach(recipe => {
+                if (!recipe.outputSlot) return;
+                if (!recipe.grid || recipe.grid.every(s => !s)) return;
+
+                const key = {};
+                let charIdx = 0;
+                const slotChars = recipe.grid.map(item => {
+                    if (!item) return ' ';
+                    const itemId = item.isCustomWeapon
+                        ? `${p.namespace}:${item.id}`
+                        : `minecraft:${item.id}`;
+                    const existing = Object.entries(key).find(([, v]) => v.item === itemId);
+                    if (existing) return existing[0];
+                    const ch = CHARS[charIdx++];
+                    key[ch] = { item: itemId };
+                    return ch;
+                });
+
+                const pattern = [
+                    slotChars.slice(0, 3).join(''),
+                    slotChars.slice(3, 6).join(''),
+                    slotChars.slice(6, 9).join('')
+                ];
+
+                const outputId = recipe.outputSlot.isCustomWeapon
+                    ? `${p.namespace}:${recipe.outputSlot.id}`
+                    : `minecraft:${recipe.outputSlot.id}`;
+
+                const recipeName = recipe.outputSlot.id || `recipe_${recipe.id}`;
+                recDir.file(`${recipeName}.json`, JSON.stringify({
+                    format_version: '1.12',
+                    'minecraft:recipe_shaped': {
+                        description: { identifier: `${p.namespace}:${recipeName}` },
+                        tags: ['crafting_table'],
+                        pattern,
+                        key,
+                        result: { item: outputId, count: 1 }
+                    }
+                }, null, 2));
+            });
+        }
+
+        /* ---- Generate ZIP & download ---- */
+        const blob     = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+        const filename = `${projName.replace(/[^a-z0-9_\-]/gi, '_')}.mcaddon`;
+        saveAs(blob, filename);
+
+        /* Persist stable UUIDs */
+        await DB.put(AppState.currentProject);
+
+        showExportSuccess(p, filename);
+
+    } catch (err) {
+        console.error('Export error:', err);
+        showToast('Export failed: ' + (err.message || err));
+    }
+}
+
+function showExportSuccess(project, filename) {
+    const body = document.getElementById('export-success-body');
+    const cmds = project.weapons.map(w => {
+        const cmd = `/give @s ${project.namespace}:${w.internalId}`;
+        return `<div class="give-command">
+            <span>${escHtml(cmd)}</span>
+            <button class="copy-btn" onclick="copyText(${JSON.stringify(cmd)})">Copy</button>
+        </div>`;
+    }).join('');
+
+    body.innerHTML = `
+        <div class="ios-instructions">
+            <i class="ph ph-device-mobile"></i> <strong>iOS:</strong> If prompted, tap "Save to Files". Then open the <code>.mcaddon</code>
+            file from the Files app to import it directly into Minecraft.
+        </div>
+        <p style="font-size:12px;color:var(--text-muted);margin-top:4px;">In-game give commands:</p>
+        ${cmds}
+    `;
+    document.getElementById('modal-export-success').classList.add('active');
+}
+
+function copyText(text) {
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(text).then(() => showToast('Copied!')).catch(fallbackCopy.bind(null, text));
+    } else {
+        fallbackCopy(text);
+    }
+}
+function fallbackCopy(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.cssText = 'position:fixed;opacity:0;';
+    document.body.appendChild(ta); ta.focus(); ta.select();
+    try { document.execCommand('copy'); showToast('Copied!'); } catch(_) {}
+    document.body.removeChild(ta);
+}
+
+/* ================================================================
+   HOME SCREEN EVENT BINDINGS
+================================================================ */
+function bindHomeEvents() {
+    document.getElementById('project-name').addEventListener('input', function() {
+        if (AppState.currentProject) AppState.currentProject.name = this.value;
+    });
+
+    document.getElementById('btn-export').addEventListener('click', exportMcaddon);
+
+    document.getElementById('btn-save').addEventListener('click', saveProject);
+
+    document.getElementById('btn-load').addEventListener('click', openLoadModal);
+
+    document.getElementById('btn-new-project').addEventListener('click', async () => {
+        const ok = await wfConfirm('New Project?', 'Start a new project? Make sure you have saved first.', 'New Project', false);
+        if (ok) {
+            AppState.currentProject = makeProject();
+            renderHome();
+            showToast('New project created');
+        }
+    });
+
+    /* Load modal */
+    document.getElementById('close-modal-load').addEventListener('click', () =>
+        document.getElementById('modal-load').classList.remove('active'));
+    document.getElementById('close-load-btn').addEventListener('click', () =>
+        document.getElementById('modal-load').classList.remove('active'));
+    document.getElementById('modal-load').addEventListener('click', e => {
+        if (e.target === e.currentTarget) e.currentTarget.classList.remove('active');
+    });
+
+    /* Export success modal */
+    document.getElementById('close-modal-export').addEventListener('click', () =>
+        document.getElementById('modal-export-success').classList.remove('active'));
+    document.getElementById('close-export-btn').addEventListener('click', () =>
+        document.getElementById('modal-export-success').classList.remove('active'));
+    document.getElementById('modal-export-success').addEventListener('click', e => {
+        if (e.target === e.currentTarget) e.currentTarget.classList.remove('active');
+    });
+
+    /* Delete confirm */
+    document.getElementById('delete-cancel-btn').addEventListener('click', hideDeleteConfirm);
+    document.getElementById('delete-confirm-btn').addEventListener('click', () => {
+        if (_pendingDeleteId && AppState.currentProject) {
+            AppState.currentProject.weapons =
+                AppState.currentProject.weapons.filter(w => w.id !== _pendingDeleteId);
+            hideDeleteConfirm();
+            renderHome();
+            saveProject().catch(() => {});
+            showToast('Weapon deleted');
+        }
+    });
+    document.getElementById('delete-confirm-overlay').addEventListener('click', e => {
+        if (e.target === e.currentTarget) hideDeleteConfirm();
+    });
+
+    /* Prevent iOS rubber-banding globally on non-scrollable areas */
+    document.addEventListener('contextmenu', e => {
+        e.preventDefault();
+        if (rbSelectedItem) rbDropItem();
+    });
+    document.body.addEventListener('touchmove', e => {
+        const allowed = e.target.closest('.stats-panel, .weapon-grid, .modal-body, .home-actions, #picker-card, .bottom-drawer, #recipe-item-grid-wrapper, .recipe-body');
+        if (!allowed && e.target.tagName === 'CANVAS') e.preventDefault();
+    }, { passive: false });
+
+    /* Recipe Builder screen */
+    document.getElementById('btn-recipe-back').addEventListener('click', closeRecipeBuilder);
+    document.getElementById('btn-save-recipe').addEventListener('click', () => {
+        rbSaveRecipe();
+        saveProject().catch(() => {});
+    });
+    document.getElementById('recipe-clear-btn').addEventListener('click', rbClearGrid);
+    document.getElementById('recipe-deselect-btn').addEventListener('click', rbDropItem);
+    document.getElementById('recipe-search').addEventListener('input', e => {
+        rbFilterAndRender(e.target.value.toLowerCase().trim());
+    });
+
+    let _resizeTimer;
+    window.addEventListener('resize', () => {
+        clearTimeout(_resizeTimer);
+        _resizeTimer = setTimeout(() => {
+            if (cm && cm._ready) cm.resize();
+        }, 150);
+    });
+}
+
+/* ================================================================
+   RECIPE BUILDER
+================================================================ */
+const RB_BRANCH    = '1.21';
+const RB_ITEM_BASE = `https://raw.githubusercontent.com/InventivetalentDev/minecraft-assets/${RB_BRANCH}/assets/minecraft/textures/item/`;
+const RB_BLOCK_BASE= `https://raw.githubusercontent.com/InventivetalentDev/minecraft-assets/${RB_BRANCH}/assets/minecraft/textures/block/`;
+
+const RB_ITEM_DEFS = [
+  // RAW ORES & MINERALS
+  ['coal','item'],['charcoal','item'],['raw_iron','item'],['raw_gold','item'],
+  ['raw_copper','item'],['diamond','item'],['emerald','item'],['lapis_lazuli','item'],
+  ['redstone','item'],['quartz','item'],['amethyst_shard','item'],['flint','item'],
+  ['clay_ball','item'],['prismarine_shard','item'],['prismarine_crystals','item'],
+  ['echo_shard','item'],
+  // INGOTS & PROCESSED METALS
+  ['iron_ingot','item'],['gold_ingot','item'],['copper_ingot','item'],
+  ['netherite_ingot','item'],['iron_nugget','item'],['gold_nugget','item'],
+  ['netherite_scrap','item'],['brick','item'],['nether_brick','item'],
+  // STICKS & BASIC RAW
+  ['stick','item'],['bone','item'],['bone_meal','item'],['bamboo','item'],
+  ['sugar_cane','item'],
+  // WOOD
+  ['oak_log','block'],['spruce_log','block'],['birch_log','block'],
+  ['jungle_log','block'],['acacia_log','block'],['dark_oak_log','block'],
+  ['mangrove_log','block'],['cherry_log','block'],['crimson_stem','block'],
+  ['warped_stem','block'],
+  // PLANKS
+  ['oak_planks','block'],['spruce_planks','block'],['birch_planks','block'],
+  ['jungle_planks','block'],['acacia_planks','block'],['dark_oak_planks','block'],
+  ['mangrove_planks','block'],['cherry_planks','block'],['bamboo_planks','block'],
+  ['crimson_planks','block'],['warped_planks','block'],
+  // STONE TYPES
+  ['cobblestone','block'],['stone','block'],['deepslate','block'],
+  ['cobbled_deepslate','block'],['blackstone','block'],['granite','block'],
+  ['diorite','block'],['andesite','block'],['tuff','block'],['calcite','block'],
+  ['basalt','block'],['netherrack','block'],['end_stone','block'],
+  ['sandstone','block'],['red_sandstone','block'],['obsidian','block'],
+  ['crying_obsidian','block'],
+  // SAND & GRAVEL & DIRT
+  ['sand','block'],['red_sand','block'],['gravel','block'],['dirt','block'],
+  ['soul_sand','block'],['soul_soil','block'],['mud','block'],['clay','block'],
+  ['moss_block','block'],
+  // GLASS
+  ['glass','block'],['tinted_glass','block'],['chain','item'],
+  // STRING, LEATHER & FIBERS
+  ['string','item'],['leather','item'],['rabbit_hide','item'],['feather','item'],
+  ['cobweb','block'],
+  // CROPS & PLANT DROPS
+  ['wheat','item'],['carrot','item'],['potato','item'],['beetroot','item'],
+  ['melon_slice','item'],['pumpkin','block'],['sugar','item'],
+  ['cocoa_beans','item'],['nether_wart','item'],['sweet_berries','item'],
+  ['apple','item'],['dried_kelp','item'],['cactus','block'],
+  // SEEDS
+  ['wheat_seeds','item'],['beetroot_seeds','item'],['melon_seeds','item'],
+  ['pumpkin_seeds','item'],
+  // RAW MEAT & FISH
+  ['beef','item'],['porkchop','item'],['chicken','item'],['mutton','item'],
+  ['cod','item'],['salmon','item'],['egg','item'],
+  // COOKED FOOD
+  ['cooked_beef','item'],['cooked_porkchop','item'],['cooked_chicken','item'],
+  ['bread','item'],['baked_potato','item'],
+  // SPECIAL FOOD
+  ['golden_apple','item'],['golden_carrot','item'],
+  // MOB DROPS & DUNGEON LOOT
+  ['gunpowder','item'],['blaze_rod','item'],['blaze_powder','item'],
+  ['ender_pearl','item'],['ender_eye','item'],['ghast_tear','item'],
+  ['magma_cream','item'],['slime_ball','item'],['ink_sac','item'],
+  ['phantom_membrane','item'],['rabbit_foot','item'],
+  ['fermented_spider_eye','item'],['shulker_shell','item'],
+  ['nautilus_shell','item'],['heart_of_the_sea','item'],['nether_star','item'],
+  ['totem_of_undying','item'],['saddle','item'],['name_tag','item'],
+  ['honeycomb','item'],['snowball','item'],
+  // DYES
+  ['white_dye','item'],['orange_dye','item'],['magenta_dye','item'],
+  ['light_blue_dye','item'],['yellow_dye','item'],['lime_dye','item'],
+  ['pink_dye','item'],['gray_dye','item'],['light_gray_dye','item'],
+  ['cyan_dye','item'],['purple_dye','item'],['blue_dye','item'],
+  ['brown_dye','item'],['green_dye','item'],['red_dye','item'],
+  ['black_dye','item'],
+  // WOOL
+  ['white_wool','block'],['orange_wool','block'],['magenta_wool','block'],
+  ['light_blue_wool','block'],['yellow_wool','block'],['lime_wool','block'],
+  ['pink_wool','block'],['gray_wool','block'],['light_gray_wool','block'],
+  ['cyan_wool','block'],['purple_wool','block'],['blue_wool','block'],
+  ['brown_wool','block'],['green_wool','block'],['red_wool','block'],
+  ['black_wool','block'],
+  // ORE BLOCKS
+  ['coal_ore','block'],['iron_ore','block'],['gold_ore','block'],
+  ['diamond_ore','block'],['emerald_ore','block'],['lapis_ore','block'],
+  ['redstone_ore','block'],['copper_ore','block'],['ancient_debris','block'],
+  ['amethyst_block','block'],
+  // ICE & SNOW
+  ['ice','block'],['packed_ice','block'],['blue_ice','block'],['snow_block','block'],
+  // NETHER
+  ['glowstone_dust','item'],['glowstone','block'],['magma_block','block'],
+  ['shroomlight','block'],
+  // BREWING & BUCKETS
+  ['glass_bottle','item'],['bucket','item'],['water_bucket','item'],
+  ['lava_bucket','item'],['milk_bucket','item'],
+  // PAPER & BOOKS
+  ['paper','item'],['book','item'],['enchanted_book','item'],
+  // WEAPONS
+  ['wooden_sword','item'],['stone_sword','item'],['iron_sword','item'],
+  ['golden_sword','item'],['diamond_sword','item'],['netherite_sword','item'],
+  ['bow','item'],['crossbow','item'],['arrow','item'],['trident','item'],
+  // TOOLS - PICKAXES
+  ['wooden_pickaxe','item'],['stone_pickaxe','item'],['iron_pickaxe','item'],
+  ['golden_pickaxe','item'],['diamond_pickaxe','item'],['netherite_pickaxe','item'],
+  // TOOLS - AXES
+  ['wooden_axe','item'],['stone_axe','item'],['iron_axe','item'],
+  ['golden_axe','item'],['diamond_axe','item'],['netherite_axe','item'],
+  // TOOLS - SHOVELS
+  ['wooden_shovel','item'],['stone_shovel','item'],['iron_shovel','item'],
+  ['golden_shovel','item'],['diamond_shovel','item'],['netherite_shovel','item'],
+  // TOOLS - HOES
+  ['wooden_hoe','item'],['stone_hoe','item'],['iron_hoe','item'],
+  ['golden_hoe','item'],['diamond_hoe','item'],['netherite_hoe','item'],
+  // TOOLS - UTILITY
+  ['shears','item'],['fishing_rod','item'],['flint_and_steel','item'],
+  ['compass','item'],['clock','item'],['spyglass','item'],
+  // ARMOR - LEATHER
+  ['leather_helmet','item'],['leather_chestplate','item'],
+  ['leather_leggings','item'],['leather_boots','item'],
+  // ARMOR - IRON
+  ['iron_helmet','item'],['iron_chestplate','item'],
+  ['iron_leggings','item'],['iron_boots','item'],
+  // ARMOR - GOLD
+  ['golden_helmet','item'],['golden_chestplate','item'],
+  ['golden_leggings','item'],['golden_boots','item'],
+  // ARMOR - DIAMOND
+  ['diamond_helmet','item'],['diamond_chestplate','item'],
+  ['diamond_leggings','item'],['diamond_boots','item'],
+  // ARMOR - NETHERITE
+  ['netherite_helmet','item'],['netherite_chestplate','item'],
+  ['netherite_leggings','item'],['netherite_boots','item'],
+  // ARMOR - SPECIAL
+  ['turtle_helmet','item'],['elytra','item'],['shield','item'],
+  ['chainmail_helmet','item'],['chainmail_chestplate','item'],
+  ['chainmail_leggings','item'],['chainmail_boots','item'],
+];
+
+let rbValidatedItems  = [];
+let rbSelectedItem    = null;
+const rbCraftGrid     = Array(9).fill(null);
+let rbOutputSlot      = null;
+let rbItemsLoaded     = false;
+
+function rbFormatName(id) {
+    return id.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function rbValidateTexture(id, source) {
+    const urls = source === 'block'
+        ? [RB_BLOCK_BASE + id + '.png', RB_ITEM_BASE + id + '.png']
+        : [RB_ITEM_BASE  + id + '.png', RB_BLOCK_BASE + id + '.png'];
+    return new Promise(resolve => {
+        const img  = new Image();
+        img.onload = () => resolve({ id, name: rbFormatName(id), iconUrl: img.src, isCustomWeapon: false });
+        img.onerror= () => {
+            const img2  = new Image();
+            img2.onload = () => resolve({ id, name: rbFormatName(id), iconUrl: img2.src, isCustomWeapon: false });
+            img2.onerror= () => resolve(null);
+            img2.src    = urls[1];
+        };
+        img.src = urls[0];
+    });
+}
+
+function rbGetCustomWeaponItems() {
+    const p = AppState.currentProject;
+    if (!p || !p.weapons.length) return [];
+    return p.weapons.map(w => {
+        const dataUrl = 'data:image/png;base64,' + pixelsToPng(w.pixelData, 32);
+        return { id: w.internalId, name: w.displayName, iconUrl: dataUrl, isCustomWeapon: true };
+    });
+}
+
+async function rbLoadAllItems() {
+    if (rbItemsLoaded) { rbRefreshCustomWeapons(); return; }
+    const statusEl = document.getElementById('recipe-loading-status');
+    statusEl.style.display = 'block';
+    statusEl.textContent   = 'Validating textures…';
+
+    const total  = RB_ITEM_DEFS.length;
+    let done     = 0;
+    const BATCH  = 30;
+    const results= [];
+    for (let i = 0; i < RB_ITEM_DEFS.length; i += BATCH) {
+        const batch = RB_ITEM_DEFS.slice(i, i + BATCH);
+        const res   = await Promise.all(batch.map(([id, src]) => rbValidateTexture(id, src)));
+        results.push(...res);
+        done += batch.length;
+        statusEl.textContent = `Validating textures… ${done}/${total}`;
+    }
+    rbValidatedItems  = results.filter(r => r !== null);
+    rbItemsLoaded     = true;
+    statusEl.textContent = `${rbValidatedItems.length} items loaded`;
+    setTimeout(() => { statusEl.style.display = 'none'; }, 2000);
+    rbRenderItemGrid(rbValidatedItems);
+}
+
+function rbRefreshCustomWeapons() {
+    // Items are already loaded; just re-render to pick up latest custom weapons
+    const q = (document.getElementById('recipe-search')?.value || '').toLowerCase().trim();
+    rbFilterAndRender(q);
+}
+
+function rbGetAllItems() {
+    return [...rbGetCustomWeaponItems(), ...rbValidatedItems];
+}
+
+function rbFilterAndRender(q) {
+    const all = rbGetAllItems();
+    if (!q) { rbRenderItemGrid(all); return; }
+    rbRenderItemGrid(all.filter(item =>
+        item.name.toLowerCase().includes(q) || item.id.includes(q)
+    ));
+}
+
+function rbRenderItemGrid(items) {
+    const grid  = document.getElementById('recipe-item-grid');
+    const count = document.getElementById('recipe-item-count');
+    if (!grid) return;
+    grid.innerHTML  = '';
+    count.textContent = `${items.length} items`;
+    items.forEach(item => {
+        const cell = document.createElement('div');
+        cell.className = 'recipe-item-cell';
+        if (rbSelectedItem && rbSelectedItem.id === item.id && rbSelectedItem.isCustomWeapon === item.isCustomWeapon)
+            cell.classList.add('rb-selected');
+        cell.innerHTML = `
+            <img src="${escHtml(item.iconUrl)}" alt="${escHtml(item.name)}">
+            <div class="recipe-slot-tooltip">${escHtml(item.name)}</div>
+        `;
+        cell.addEventListener('click',       () => rbPickUpItem(item));
+        cell.addEventListener('touchstart',  () => rbPickUpItem(item), { passive: true });
+        grid.appendChild(cell);
+    });
+}
+
+/* ---- cursor / selection ---- */
+function rbPickUpItem(item) {
+    rbSelectedItem = item;
+    // Update desktop cursor
+    const cursorEl  = document.getElementById('recipe-cursor-item');
+    const cursorImg = cursorEl.querySelector('img');
+    cursorImg.src   = item.iconUrl;
+    cursorEl.style.display = 'block';
+    // Update mobile bar
+    document.getElementById('recipe-selected-icon').src = item.iconUrl;
+    document.getElementById('recipe-selected-name').textContent = item.name;
+    document.getElementById('recipe-selected-bar').style.display = 'flex';
+    // Re-render grid to highlight selection
+    const q = (document.getElementById('recipe-search')?.value || '').toLowerCase().trim();
+    rbFilterAndRender(q);
+}
+
+function rbDropItem() {
+    rbSelectedItem  = null;
+    document.getElementById('recipe-cursor-item').style.display = 'none';
+    document.getElementById('recipe-selected-bar').style.display = 'none';
+    const q = (document.getElementById('recipe-search')?.value || '').toLowerCase().trim();
+    rbFilterAndRender(q);
+}
+
+/* ---- crafting grid ---- */
+function rbInitCraftingGrid() {
+    const grid = document.getElementById('recipe-crafting-grid');
+    grid.innerHTML = '';
+    for (let i = 0; i < 9; i++) {
+        const slot = document.createElement('div');
+        slot.className   = 'recipe-craft-slot';
+        slot.dataset.idx = i;
+        slot.addEventListener('click', () => {
+            if (rbSelectedItem) {
+                rbCraftGrid[i] = { ...rbSelectedItem };
+                rbRenderSlot(slot, rbCraftGrid[i]);
+            } else if (rbCraftGrid[i]) {
+                rbPickUpItem(rbCraftGrid[i]);
+                rbCraftGrid[i] = null;
+                rbRenderSlot(slot, null);
+            }
+        });
+        slot.addEventListener('contextmenu', e => {
+            e.preventDefault();
+            if (rbCraftGrid[i]) { rbCraftGrid[i] = null; rbRenderSlot(slot, null); }
+        });
+        /* long-press to remove on mobile */
+        let lp;
+        slot.addEventListener('touchstart', () => {
+            lp = setTimeout(() => {
+                if (rbCraftGrid[i]) { rbCraftGrid[i] = null; rbRenderSlot(slot, null); }
+            }, 600);
+        }, { passive: true });
+        slot.addEventListener('touchend',  () => clearTimeout(lp));
+        slot.addEventListener('touchmove', () => clearTimeout(lp), { passive: true });
+        grid.appendChild(slot);
+    }
+
+    /* Output slot */
+    const out = document.getElementById('recipe-output-slot');
+    out.innerHTML = '';
+    out.onclick = () => {
+        if (out.classList.contains('rb-locked')) return;
+        if (rbSelectedItem) {
+            rbOutputSlot = { ...rbSelectedItem };
+            rbRenderOutputSlot();
+        } else if (rbOutputSlot) {
+            rbPickUpItem(rbOutputSlot);
+            rbOutputSlot = null;
+            rbRenderOutputSlot();
+        }
+    };
+    out.addEventListener('contextmenu', e => {
+        e.preventDefault();
+        if (out.classList.contains('rb-locked')) return;
+        if (rbOutputSlot) { rbOutputSlot = null; rbRenderOutputSlot(); }
+    });
+    let lpOut;
+    out.addEventListener('touchstart', () => {
+        lpOut = setTimeout(() => {
+            if (out.classList.contains('rb-locked')) return;
+            if (rbOutputSlot) { rbOutputSlot = null; rbRenderOutputSlot(); }
+        }, 600);
+    }, { passive: true });
+    out.addEventListener('touchend',  () => clearTimeout(lpOut));
+    out.addEventListener('touchmove', () => clearTimeout(lpOut), { passive: true });
+}
+
+function rbRenderSlot(slotEl, item) {
+    slotEl.innerHTML = item
+        ? `<img src="${escHtml(item.iconUrl)}" alt="${escHtml(item.name)}"><div class="recipe-slot-tooltip">${escHtml(item.name)}</div>`
+        : '';
+}
+
+function rbRenderOutputSlot() {
+    const out = document.getElementById('recipe-output-slot');
+    out.innerHTML = rbOutputSlot
+        ? `<img src="${escHtml(rbOutputSlot.iconUrl)}" alt="${escHtml(rbOutputSlot.name)}"><div class="recipe-slot-tooltip">${escHtml(rbOutputSlot.name)}</div>`
+        : '';
+}
+
+function rbClearGrid() {
+    rbCraftGrid.fill(null);
+    rbOutputSlot = null;
+    rbDropItem();
+    rbInitCraftingGrid();
+}
+
+function rbSaveRecipe() {
+    const p = AppState.currentProject;
+    if (!p) return;
+    if (!p.recipes) p.recipes = [];
+
+    const filledSlots = rbCraftGrid.filter(s => s).length;
+    if (filledSlots < 2) {
+        showToast('Recipe needs at least 2 ingredients');
+        return;
+    }
+    if (!rbOutputSlot) {
+        showToast('Place an item in the Result slot to define what is crafted');
+        return;
+    }
+
+    const recipe = {
+        id: genId(),
+        weaponId: AppState.editingWeaponId || null,
+        grid: rbCraftGrid.slice(),
+        outputSlot: { ...rbOutputSlot },
+        savedAt: Date.now()
+    };
+
+    /* Replace existing recipe with same output, or append */
+    const idx = p.recipes.findIndex(
+        r => r.outputSlot && r.outputSlot.id === rbOutputSlot.id &&
+             r.outputSlot.isCustomWeapon === rbOutputSlot.isCustomWeapon
+    );
+    const overwriting = idx >= 0;
+    if (overwriting) p.recipes[idx] = recipe;
+    else             p.recipes.push(recipe);
+
+    p.updatedAt = Date.now();
+    showToast(overwriting ? 'Recipe updated!' : 'Recipe saved!');
+}
+
+/* ---- navigation ---- */
+function openRecipeBuilder() {
+    navigateTo('screen-recipe', 'screen-editor');
+    rbInitCraftingGrid();
+
+    /* Auto-set output slot to the current weapon being edited */
+    const p = AppState.currentProject;
+    const weaponId = AppState.editingWeaponId;
+    const weapon = p && weaponId ? p.weapons.find(w => w.id === weaponId) : null;
+    if (weapon) {
+        const iconUrl = 'data:image/png;base64,' + pixelsToPng(weapon.pixelData, 32);
+        rbOutputSlot = { id: weapon.internalId, name: weapon.displayName, iconUrl, isCustomWeapon: true };
+        rbRenderOutputSlot();
+
+        /* Lock the output slot */
+        const outEl = document.getElementById('recipe-output-slot');
+        outEl.classList.add('rb-locked');
+
+        /* Pre-populate crafting grid if a recipe already exists for this weapon */
+        if (p.recipes) {
+            const existing = p.recipes.find(
+                r => r.outputSlot && r.outputSlot.id === weapon.internalId && r.outputSlot.isCustomWeapon
+            );
+            if (existing && existing.grid) {
+                existing.grid.forEach((item, i) => {
+                    rbCraftGrid[i] = item ? { ...item } : null;
+                });
+                /* Re-render each slot with its stored item */
+                const slots = document.getElementById('recipe-crafting-grid').querySelectorAll('.recipe-craft-slot');
+                slots.forEach((slot, i) => rbRenderSlot(slot, rbCraftGrid[i]));
+            }
+        }
+    }
+
+    /* Lazily load vanilla items; always refresh custom weapons */
+    rbLoadAllItems();
+}
+
+function closeRecipeBuilder() {
+    rbDropItem();
+    /* Remove output slot lock */
+    document.getElementById('recipe-output-slot').classList.remove('rb-locked');
+    document.getElementById('screen-recipe').classList.remove('screen-active');
+    document.getElementById('screen-editor').classList.add('screen-active');
+}
+
+/* ---- desktop cursor move ---- */
+document.addEventListener('mousemove', e => {
+    const cursorEl = document.getElementById('recipe-cursor-item');
+    if (cursorEl.style.display === 'block') {
+        cursorEl.style.left = (e.clientX + 12) + 'px';
+        cursorEl.style.top  = (e.clientY + 12) + 'px';
+    }
+});
+
+/* ================================================================
+   SLIDER FILL UPDATER
+================================================================ */
+function updateSliderFill(input) {
+    const min = parseFloat(input.min) || 0;
+    const max = parseFloat(input.max) || 100;
+    const val = parseFloat(input.value) || 0;
+    const range = max - min;
+    const pct = range === 0 ? 0 : Math.round(((val - min) / range) * 100);
+    input.style.background = `linear-gradient(to right, var(--primary-light) ${pct}%, #333 ${pct}%)`;
+}
+
+/* ================================================================
+   INIT
+================================================================ */
+async function init() {
+    await DB.open();
+    let project = await loadMostRecent();
+    if (!project) project = makeProject();
+    AppState.currentProject = project;
+    bindHomeEvents();
+    renderHome();
+    document.querySelectorAll('input[type=range]').forEach(input => {
+        updateSliderFill(input);
+        input.addEventListener('input', () => updateSliderFill(input));
+    });
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
 </body>
 </html>
