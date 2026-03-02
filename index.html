@@ -1432,6 +1432,7 @@ class CanvasManager {
         this.isPainting = false;
         this.stateChangedThisStroke = false;
         this.onionSkin = null;
+        this.onionFrontActive = false;
         this.undoStack = [];
         this.redoStack = [];
         this._ready    = false;
@@ -1733,8 +1734,7 @@ class CanvasManager {
                 imageSmoothing: false
             });
             this.canvas.add(img);
-                        // Respect the front toggle state when loading a new image
-            if (typeof onionFrontActive !== 'undefined' && onionFrontActive) {
+            if (this.onionFrontActive) {
                 img.bringToFront();
                 img.set({ opacity: 1 });
             } else {
@@ -2025,18 +2025,12 @@ function bindEditorEvents() {
     });
 
     /* --- Drawers --- */
-        // Track the toggle state
-    let onionFrontActive = false;
-
-    // New button click logic
     document.getElementById('onion-front-btn').addEventListener('click', function() {
-        onionFrontActive = !onionFrontActive;
-        
-        // Highlight the button when active
-        this.style.color = onionFrontActive ? 'var(--primary-light)' : '';
-        
-        if (cm && cm.onionSkin) {
-            if (onionFrontActive) {
+        if (!cm) return;
+        cm.onionFrontActive = !cm.onionFrontActive;
+        this.style.color = cm.onionFrontActive ? 'var(--primary-light)' : '';
+        if (cm.onionSkin) {
+            if (cm.onionFrontActive) {
                 cm.onionSkin.bringToFront();
                 cm.onionSkin.set('opacity', 1);
             } else {
@@ -2047,14 +2041,11 @@ function bindEditorEvents() {
         }
     });
 
-    // Modified opacity slider logic
     document.getElementById('onion-opacity').addEventListener('input', function() {
-        if (cm && cm.onionSkin) {
-            // Only apply opacity changes if the front toggle isn't active
-            if (!onionFrontActive) {
-                cm.onionSkin.set('opacity', parseFloat(this.value));
-                cm.canvas.requestRenderAll();
-            }
+        if (!cm) return;
+        if (cm.onionSkin && !cm.onionFrontActive) {
+            cm.onionSkin.set('opacity', parseFloat(this.value));
+            cm.canvas.requestRenderAll();
         }
     });
     document.getElementById('close-onion').addEventListener('click', () =>
@@ -2069,12 +2060,6 @@ function bindEditorEvents() {
         });
     });
 
-    document.getElementById('onion-opacity').addEventListener('input', function() {
-        if (cm && cm.onionSkin) {
-            cm.onionSkin.set('opacity', parseFloat(this.value));
-            cm.canvas.requestRenderAll();
-        }
-    });
     document.querySelectorAll('[data-onion]').forEach(btn => {
         btn.addEventListener('click', () => {
             const type = btn.dataset.onion;
