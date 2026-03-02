@@ -837,6 +837,9 @@
                 <button class="btn-primary" data-onion="axe"><i class="ph ph-axe"></i> Axe</button>
                 <button class="btn-primary" data-onion="shovel"><i class="ph ph-shovel"></i> Shovel</button>
                 <button class="btn-primary" data-onion="hoe"><i class="ph ph-plant"></i> Hoe</button>
+                <button class="btn-primary" data-onion="trident"><i class="ph ph-lightning"></i> Trident</button>
+                <button class="btn-primary" data-onion="spear"><i class="ph ph-arrow-up-right"></i> Spear</button>
+                <button class="btn-primary" data-onion="mace"><i class="ph ph-gavel"></i> Mace</button>
                 <button class="btn-primary" style="background:#555" data-onion="clear"><i class="ph ph-x"></i> Clear</button>
             </div>
         </div>
@@ -1191,7 +1194,7 @@ document.addEventListener('DOMContentLoaded', () => {
 /* ================================================================
    CONSTANTS
 ================================================================ */
-const WEAPON_TYPE_ICONS = { sword:'<i class="ph ph-sword"></i>', pickaxe:'<i class="ph ph-pickaxe"></i>', axe:'<i class="ph ph-axe"></i>', shovel:'<i class="ph ph-shovel"></i>', hoe:'<i class="ph ph-plant"></i>' };
+const WEAPON_TYPE_ICONS = { sword:'<i class="ph ph-sword"></i>', pickaxe:'<i class="ph ph-pickaxe"></i>', axe:'<i class="ph ph-axe"></i>', shovel:'<i class="ph ph-shovel"></i>', hoe:'<i class="ph ph-plant"></i>', trident:'<i class="ph ph-lightning"></i>', spear:'<i class="ph ph-arrow-up-right"></i>', mace:'<i class="ph ph-gavel"></i>' };
 
 const WEAPON_DEFAULTS = {
     sword:   { damage:7,  cooldown:0.4, durability:500, repairMaterial:'Iron Ingot' },
@@ -1199,6 +1202,9 @@ const WEAPON_DEFAULTS = {
     axe:     { damage:9,  cooldown:1.2, durability:500, repairMaterial:'Iron Ingot' },
     shovel:  { damage:4,  cooldown:0.6, durability:500, repairMaterial:'Iron Ingot' },
     hoe:     { damage:2,  cooldown:0.4, durability:500, repairMaterial:'Iron Ingot' },
+    trident: { damage:9,  cooldown:1.1, durability:250, repairMaterial:'Diamond' },
+    spear:   { damage:6,  cooldown:0.7, durability:400, repairMaterial:'Iron Ingot' },
+    mace:    { damage:10, cooldown:1.5, durability:500, repairMaterial:'Diamond' },
 };
 
 const REPAIR_MAP = {
@@ -1844,7 +1850,13 @@ function bindEditorEvents() {
             const type = btn.dataset.onion;
             if (type === 'clear') { cm.clearOnionSkin(); }
             else {
-                const url = `https://raw.githubusercontent.com/InventivetalentDev/minecraft-assets/1.20.1/assets/minecraft/textures/item/stone_${type}.png`;
+                const ONION_TEXTURE_OVERRIDES = {
+                    trident: 'https://raw.githubusercontent.com/InventivetalentDev/minecraft-assets/1.20.1/assets/minecraft/textures/item/trident.png',
+                    spear:   'https://raw.githubusercontent.com/InventivetalentDev/minecraft-assets/1.20.1/assets/minecraft/textures/item/trident.png',
+                    mace:    'https://raw.githubusercontent.com/InventivetalentDev/minecraft-assets/1.20.1/assets/minecraft/textures/item/stone_sword.png',
+                };
+                const url = ONION_TEXTURE_OVERRIDES[type] ||
+                    `https://raw.githubusercontent.com/InventivetalentDev/minecraft-assets/1.20.1/assets/minecraft/textures/item/stone_${type}.png`;
                 cm.setOnionSkin(url);
             }
             document.getElementById('onion-drawer').classList.remove('visible');
