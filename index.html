@@ -980,6 +980,69 @@
             </div>
         </div>
 
+        <div class="stat-group" style="border-top:1px solid rgba(255,255,255,0.12);padding-top:12px;margin-top:4px;">
+            <label class="stat-label" style="font-size:1.1em;font-weight:700;letter-spacing:0.04em;">⚡ Special Abilities</label>
+        </div>
+
+        <div class="stat-group">
+            <div class="toggle-row">
+                <span class="toggle-label">🎆 Firework Burst</span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="stat-firework-burst">
+                    <span class="toggle-track"></span>
+                </label>
+            </div>
+            <div class="info-text">Shoots fireworks on use (adds projectile &amp; throwable components).</div>
+        </div>
+
+        <div class="stat-group">
+            <div class="toggle-row">
+                <span class="toggle-label">🔴 Redstone Trail</span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="stat-redstone-trail">
+                    <span class="toggle-track"></span>
+                </label>
+            </div>
+            <div class="info-text">Places redstone wire on blocks when used.</div>
+        </div>
+
+        <div class="stat-group">
+            <label class="stat-label">🏹 Magic Arrows</label>
+            <select class="stat-input" id="stat-arrow-type">
+                <option value="">None</option>
+                <option value="spectral">Spectral Arrow</option>
+                <option value="poison">Tipped — Poison</option>
+                <option value="harming">Tipped — Harming</option>
+                <option value="healing">Tipped — Healing</option>
+                <option value="slowness">Tipped — Slowness</option>
+                <option value="weakness">Tipped — Weakness</option>
+            </select>
+        </div>
+
+        <div class="stat-group">
+            <label class="stat-label">🌱 Seed Planter</label>
+            <select class="stat-input" id="stat-seed-type">
+                <option value="">None</option>
+                <option value="wheat_seeds">Wheat Seeds</option>
+                <option value="beetroot_seeds">Beetroot Seeds</option>
+                <option value="melon_seeds">Melon Seeds</option>
+                <option value="pumpkin_seeds">Pumpkin Seeds</option>
+                <option value="carrots">Carrot</option>
+                <option value="potatoes">Potato</option>
+            </select>
+        </div>
+
+        <div class="stat-group">
+            <div class="toggle-row">
+                <span class="toggle-label">🐕 Can Tame Pets</span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="stat-pet-tamer">
+                    <span class="toggle-track"></span>
+                </label>
+            </div>
+            <div class="info-text">Makes item interactable for taming animals.</div>
+        </div>
+
         <div style="height:16px;flex-shrink:0;"></div>
 
         <button class="action-btn primary define-recipe-btn" id="btn-define-recipe"><i class="ph ph-cooking-pot"></i> ⚒️ Define Recipe</button>
@@ -1264,6 +1327,11 @@ function makeWeapon(type = 'sword') {
         isEdible: false,
         nutrition: 4,
         miningSpeed: 1,
+        fireworkBurst: false,
+        redstoneTrail: false,
+        arrowType: '',
+        seedType: '',
+        petTamer: false,
         // -----------------------
 
         pixelData: emptyPixels(),
@@ -1723,6 +1791,11 @@ function openEditor(weaponId) {
     document.getElementById('stat-nutrition-val').textContent = weapon.nutrition || 4;
     document.getElementById('stat-mining-speed').value = weapon.miningSpeed || 1;
     document.getElementById('stat-mining-speed-val').textContent = (weapon.miningSpeed || 1) + 'x';
+    document.getElementById('stat-firework-burst').checked = weapon.fireworkBurst || false;
+    document.getElementById('stat-redstone-trail').checked = weapon.redstoneTrail || false;
+    document.getElementById('stat-arrow-type').value       = weapon.arrowType || '';
+    document.getElementById('stat-seed-type').value        = weapon.seedType || '';
+    document.getElementById('stat-pet-tamer').checked      = weapon.petTamer || false;
     document.getElementById('editor-weapon-title').textContent = weapon.displayName;
 
     navigateTo('screen-editor', 'screen-home');
@@ -1753,6 +1826,11 @@ function saveCurrentWeapon(quiet = false) {
     weapon.isEdible        = document.getElementById('stat-edible').checked;
     weapon.nutrition       = parseInt(document.getElementById('stat-nutrition').value, 10);
     weapon.miningSpeed     = parseInt(document.getElementById('stat-mining-speed').value, 10);
+    weapon.fireworkBurst   = document.getElementById('stat-firework-burst').checked;
+    weapon.redstoneTrail   = document.getElementById('stat-redstone-trail').checked;
+    weapon.arrowType       = document.getElementById('stat-arrow-type').value;
+    weapon.seedType        = document.getElementById('stat-seed-type').value;
+    weapon.petTamer        = document.getElementById('stat-pet-tamer').checked;
     weapon.pixelData       = cm ? cm.extractPixels() : weapon.pixelData;
     weapon.updatedAt       = Date.now();
     p.updatedAt            = Date.now();
@@ -2254,6 +2332,63 @@ async function exportMcaddon() {
                         }
                     ]
                 };
+            }
+
+            // 5. Firework Burst
+            if (w.fireworkBurst) {
+                components['minecraft:projectile'] = {
+                    "projectile_entity": "minecraft:fireworks_rocket"
+                };
+                components['minecraft:throwable'] = {
+                    "do_swing_animation": true
+                };
+            }
+
+            // 6. Redstone Trail (note: Seed Planter below takes precedence if both are enabled)
+            if (w.redstoneTrail) {
+                components['minecraft:block_placer'] = {
+                    "block": "minecraft:redstone_wire",
+                    "use_on": ["minecraft:stone", "minecraft:dirt", "minecraft:grass"]
+                };
+            }
+
+            // 7. Magic Arrows
+            if (w.arrowType && w.arrowType !== '') {
+                const arrowItem = w.arrowType === 'spectral' ? 'minecraft:spectral_arrow' : 'minecraft:arrow';
+                components['minecraft:shooter'] = {
+                    "ammunition": [{ "item": arrowItem, "use_offhand": true, "search_inventory": true }],
+                    "max_draw_duration": 1.0,
+                    "charge_on_draw": true
+                };
+                components['minecraft:use_modifiers'] = {
+                    "use_duration": 1.0,
+                    "movement_modifier": 0.35
+                };
+            }
+
+            // 8. Seed Planter (overwrites Redstone Trail's block_placer if both are enabled)
+            if (w.seedType && w.seedType !== '') {
+                const seedBlocks = {
+                    wheat_seeds: "minecraft:wheat",
+                    beetroot_seeds: "minecraft:beetroot",
+                    melon_seeds: "minecraft:melon_stem",
+                    pumpkin_seeds: "minecraft:pumpkin_stem",
+                    carrots: "minecraft:carrots",
+                    potatoes: "minecraft:potatoes"
+                };
+                components['minecraft:block_placer'] = {
+                    "block": seedBlocks[w.seedType] || "minecraft:wheat",
+                    "use_on": ["minecraft:farmland"]
+                };
+            }
+
+            // 9. Pet Tamer (preserves existing food component nutrition if isEdible is also set)
+            if (w.petTamer) {
+                components['minecraft:food'] = components['minecraft:food'] || {
+                    "nutrition": 0,
+                    "can_always_eat": true
+                };
+                components['minecraft:interact_button'] = { "button_text": "Tame" };
             }
 
             if (w.repairMaterial && REPAIR_MAP[w.repairMaterial]) {
