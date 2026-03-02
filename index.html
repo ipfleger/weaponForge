@@ -2096,7 +2096,7 @@ function bindEditorEvents() {
     document.getElementById('btn-define-recipe').addEventListener('click', openRecipeBuilder);
 
         /* --- Prevent iOS bounce / pinch-to-zoom and Double-Tap Zoom on canvas area --- */
-                const canvasArea = document.getElementById('canvas-wrapper'); // Changed from canvas-area so it doesn't break floating buttons XXXX
+                const canvasArea = document.getElementById('canvas-area'); 
         let lastCanvasTouchEnd = 0;
     
     // Prevent double-tap zoom natively without breaking rapid single-tap drawing
