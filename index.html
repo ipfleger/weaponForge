@@ -2384,6 +2384,17 @@ async function openLoadModal() {
    .mcaddon EXPORT
 ================================================================ */
 async function exportMcaddon() {
+    const DATA_FORMAT = '1.20.50';
+
+    /* Sanitize a string to a safe Bedrock identifier segment: lowercase a-z0-9_ */
+    function sanitizeId(str) {
+        return (str || '')
+            .toLowerCase()
+            .replace(/[^a-z0-9_]/g, '_')
+            .replace(/_+/g, '_')
+            .replace(/^_+|_+$/g, '') || 'item';
+    }
+
     const p = AppState.currentProject;
     if (!p || !p.weapons.length) { showToast('No weapons to export'); return; }
 
@@ -2403,13 +2414,27 @@ async function exportMcaddon() {
         const bpModUUID    = genId();
         const projName     = p.name || 'WeaponForge Project';
 
+        /* Sanitize namespace */
+        const ns = sanitizeId(p.namespace || 'weaponforge');
+
+        /* Build safe, unique IDs for each weapon */
+        const usedIds = new Set();
+        const weaponIds = p.weapons.map(w => {
+            let base = sanitizeId(w.internalId || w.displayName || 'weapon');
+            let safe = base;
+            let n = 2;
+            while (usedIds.has(safe)) { safe = `${base}_${n++}`; }
+            usedIds.add(safe);
+            return safe;
+        });
+
         /* ---- Manifests ---- */
         rpDir.file('manifest.json', JSON.stringify({
             format_version: 2,
             header: {
                 name: `${projName} Resources`,
                 description: 'Resource pack created with WeaponForge',
-                uuid: rpHeaderUUID, version: [1,0,0], min_engine_version: [1,20,0]
+                uuid: rpHeaderUUID, version: [1,0,0], min_engine_version: [1,20,50]
             },
             modules: [{ type: 'resources', uuid: rpModUUID, version: [1,0,0] }]
         }, null, 2));
@@ -2419,7 +2444,7 @@ async function exportMcaddon() {
             header: {
                 name: `${projName} Behaviors`,
                 description: 'Behavior pack created with WeaponForge',
-                uuid: bpHeaderUUID, version: [1,0,0], min_engine_version: [1,20,0]
+                uuid: bpHeaderUUID, version: [1,0,0], min_engine_version: [1,20,50]
             },
             modules: [{ type: 'data', uuid: bpModUUID, version: [1,0,0] }],
             dependencies: [{ uuid: rpHeaderUUID, version: [1,0,0] }]
@@ -2432,8 +2457,9 @@ async function exportMcaddon() {
 
         /* ---- item_texture.json ---- */
         const textureData = {};
-        p.weapons.forEach(w => {
-            textureData[w.internalId] = { textures: `textures/items/${w.internalId}` };
+        p.weapons.forEach((w, i) => {
+            const safeId = weaponIds[i];
+            textureData[safeId] = { textures: `textures/items/${safeId}` };
         });
         rpDir.file('textures/item_texture.json', JSON.stringify({
             resource_pack_name: `${projName} Resources`,
@@ -2445,130 +2471,37 @@ async function exportMcaddon() {
         const texDir = rpDir.folder('textures/items');
         const itmDir = bpDir.folder('items');
 
-        for (const w of p.weapons) {
-            /* 16×16 PNG texture */
-            texDir.file(`${w.internalId}.png`, pixelsToPng(w.pixelData, 16), { base64: true });
+        for (let i = 0; i < p.weapons.length; i++) {
+            const w      = p.weapons[i];
+            const safeId = weaponIds[i];
 
-            /* Behavior item JSON */
+            /* Clamp numeric values */
+            const damage     = Math.max(0, parseInt(w.damage, 10) || 0);
+            const durability = Math.max(1, parseInt(w.durability, 10) || 1);
+            const cooldown   = parseFloat(w.cooldown) || 0;
+
+            /* 16×16 PNG texture */
+            texDir.file(`${safeId}.png`, pixelsToPng(w.pixelData, 16), { base64: true });
+
+            /* Behavior item JSON — conservative stable components only */
             const components = {
-                'minecraft:icon':         w.internalId,
-                'minecraft:display_name': { value: w.displayName },
-                'minecraft:hand_equipped': true,
-                'minecraft:max_stack_size': 1,
-                'minecraft:durability':   { max_durability: w.durability },
-                'minecraft:damage':        w.damage,
-                'minecraft:cooldown':     { category: w.weaponType, duration: w.cooldown },
-                'minecraft:allow_off_hand': w.allowOffHand || false
+                'minecraft:icon':           { texture: safeId },
+                'minecraft:hand_equipped':   true,
+                'minecraft:max_stack_size':  1,
+                'minecraft:durability':      { max_durability: durability },
+                'minecraft:damage':          { value: damage },
+                'minecraft:allow_off_hand':  w.allowOffHand || false
             };
 
-            // 1. Enchanted Glow
-            if (w.isEnchanted) {
-                components['minecraft:foil'] = true;
+            if (cooldown > 0) {
+                components['minecraft:cooldown'] = { category: sanitizeId(w.weaponType || 'weapon'), duration: cooldown };
             }
 
-            // 2. Magic Projectiles
-            if (w.projectile && w.projectile !== '') {
-                components['minecraft:projectile'] = {
-                    "projectile_entity": `minecraft:${w.projectile}`
-                };
-                components['minecraft:throwable'] = {
-                    "do_swing_animation": true
-                };
-            }
-
-            // 3. Edible
-            if (w.isEdible) {
-                components['minecraft:food'] = {
-                    "nutrition": w.nutrition,
-                    "can_always_eat": true
-                };
-            }
-
-            // 4. Super Miner
-            if (w.miningSpeed > 1) {
-                components['minecraft:digger'] = {
-                    "use_efficiency": true,
-                    "destroy_speeds": [
-                        {
-                            "block": { "tags": "q.any_tag('stone', 'metal', 'dirt', 'wood', 'sand', 'gravel')" },
-                            "speed": w.miningSpeed
-                        }
-                    ]
-                };
-            }
-
-            // 5. Firework Burst
-            if (w.fireworkBurst) {
-                components['minecraft:projectile'] = {
-                    "projectile_entity": "minecraft:fireworks_rocket"
-                };
-                components['minecraft:throwable'] = {
-                    "do_swing_animation": true
-                };
-            }
-
-            // 6. Redstone Trail (note: Seed Planter below takes precedence if both are enabled)
-            if (w.redstoneTrail) {
-                components['minecraft:block_placer'] = {
-                    "block": "minecraft:redstone_wire",
-                    "use_on": ["minecraft:stone", "minecraft:dirt", "minecraft:grass"]
-                };
-            }
-
-            // 7. Magic Arrows
-            if (w.arrowType && w.arrowType !== '') {
-                const arrowItem = w.arrowType === 'spectral' ? 'minecraft:spectral_arrow' : 'minecraft:arrow';
-                components['minecraft:shooter'] = {
-                    "ammunition": [{ "item": arrowItem, "use_offhand": true, "search_inventory": true }],
-                    "max_draw_duration": 1.0,
-                    "charge_on_draw": true
-                };
-                components['minecraft:use_modifiers'] = {
-                    "use_duration": 1.0,
-                    "movement_modifier": 0.35
-                };
-            }
-
-            // 8. Seed Planter (overwrites Redstone Trail's block_placer if both are enabled)
-            if (w.seedType && w.seedType !== '') {
-                const seedBlocks = {
-                    wheat_seeds: "minecraft:wheat",
-                    beetroot_seeds: "minecraft:beetroot",
-                    melon_seeds: "minecraft:melon_stem",
-                    pumpkin_seeds: "minecraft:pumpkin_stem",
-                    carrots: "minecraft:carrots",
-                    potatoes: "minecraft:potatoes"
-                };
-                components['minecraft:block_placer'] = {
-                    "block": seedBlocks[w.seedType] || "minecraft:wheat",
-                    "use_on": ["minecraft:farmland"]
-                };
-            }
-
-            // 9. Pet Tamer (preserves existing food component nutrition if isEdible is also set)
-            if (w.petTamer) {
-                components['minecraft:food'] = components['minecraft:food'] || {
-                    "nutrition": 0,
-                    "can_always_eat": true
-                };
-                components['minecraft:interact_button'] = { "button_text": "Tame" };
-            }
-
-            if (w.repairMaterial && REPAIR_MAP[w.repairMaterial]) {
-                components['minecraft:repairable'] = {
-                    repair_items: [{
-                        items: [`minecraft:${REPAIR_MAP[w.repairMaterial]}`],
-                        // Molang: restores item's remaining durability + 5% of its max durability per repair item used
-                        repair_amount: 'context.other->query.remaining_durability + 0.05 * context.other->query.max_durability'
-                    }]
-                };
-            }
-
-            itmDir.file(`${w.internalId}.json`, JSON.stringify({
-                format_version: '1.20.0',
+            itmDir.file(`${safeId}.json`, JSON.stringify({
+                format_version: DATA_FORMAT,
                 'minecraft:item': {
                     description: {
-                        identifier: `${p.namespace}:${w.internalId}`,
+                        identifier: `${ns}:${safeId}`,
                         category: 'equipment'
                     },
                     components
@@ -2589,8 +2522,8 @@ async function exportMcaddon() {
                 const slotChars = recipe.grid.map(item => {
                     if (!item) return ' ';
                     const itemId = item.isCustomWeapon
-                        ? `${p.namespace}:${item.id}`
-                        : `minecraft:${item.id}`;
+                        ? `${ns}:${sanitizeId(item.id)}`
+                        : `minecraft:${sanitizeId(item.id)}`;
                     const existing = Object.entries(key).find(([, v]) => v.item === itemId);
                     if (existing) return existing[0];
                     const ch = CHARS[charIdx++];
@@ -2605,14 +2538,14 @@ async function exportMcaddon() {
                 ];
 
                 const outputId = recipe.outputSlot.isCustomWeapon
-                    ? `${p.namespace}:${recipe.outputSlot.id}`
-                    : `minecraft:${recipe.outputSlot.id}`;
+                    ? `${ns}:${sanitizeId(recipe.outputSlot.id)}`
+                    : `minecraft:${sanitizeId(recipe.outputSlot.id)}`;
 
-                const recipeName = recipe.outputSlot.id || `recipe_${recipe.id}`;
+                const recipeName = (recipe.outputSlot.id && sanitizeId(recipe.outputSlot.id)) || `recipe_${sanitizeId(recipe.id)}`;
                 recDir.file(`${recipeName}.json`, JSON.stringify({
-                    format_version: '1.12',
+                    format_version: DATA_FORMAT,
                     'minecraft:recipe_shaped': {
-                        description: { identifier: `${p.namespace}:${recipeName}` },
+                        description: { identifier: `${ns}:${recipeName}` },
                         tags: ['crafting_table'],
                         pattern,
                         key,
